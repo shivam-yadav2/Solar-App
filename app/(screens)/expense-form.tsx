@@ -1,0 +1,12 @@
+import React, { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { api } from '../../src/lib/api';
+import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+
+export default function ExpenseFormScreen() {
+  const router = useRouter(); const [projects, setProjects] = useState<any[]>([]); const [form, setForm] = useState<any>({ projectId: '', expenseCategory: 'Material', expenseName: '', amount: '', date: new Date().toISOString().slice(0, 10), vendor: '', remark: '' }); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
+  useEffect(() => { api.getProjects({ limit: '100' }).then(data => setProjects(data.projects)).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
+  const save = async () => { if (!form.projectId || !form.expenseName.trim() || !Number(form.amount)) { Alert.alert('Missing details', 'Project, expense name, and a positive amount are required.'); return; } setSaving(true); try { await api.createExpense({ ...form, amount: Number(form.amount) }); router.back(); } catch (e: any) { Alert.alert('Could not add expense', e.message); } finally { setSaving(false); } };
+  return <Screen title="Add Expense" subtitle="Record a project cost" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <Card><OptionField label="Project *" value={form.projectId} onChange={set('projectId')} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /><ChoiceField label="Category" value={form.expenseCategory} options={['Material', 'Labor', 'Transport', 'Installation', 'Government Fees', 'Office', 'Other']} onChange={set('expenseCategory')} /><FormField label="Expense name" value={form.expenseName} onChangeText={set('expenseName')} required /><FormField label="Amount" value={form.amount} onChangeText={set('amount')} keyboardType="numeric" required /><FormField label="Date" value={form.date} onChangeText={set('date')} /><FormField label="Vendor" value={form.vendor} onChangeText={set('vendor')} /><FormField label="Remark" value={form.remark} onChangeText={set('remark')} multiline /><PrimaryButton label={saving ? 'Saving…' : 'Add Expense'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+}

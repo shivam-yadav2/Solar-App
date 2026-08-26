@@ -1,0 +1,15 @@
+import React, { useEffect, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { api } from '../../src/lib/api';
+import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, OptionField, Screen } from '../../src/components/ui';
+import { formatDate } from '../../src/lib/formatters';
+import { useAuth } from '../../src/context/AuthContext';
+
+export default function DiscomScreen() {
+  const router = useRouter(); const { hasPermission } = useAuth(); const [projects, setProjects] = useState<any[]>([]); const [projectId, setProjectId] = useState(''); const [stages, setStages] = useState<any[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
+  const loadStages = async (value: string) => { setProjectId(value); if (!value) return setStages([]); try { setStages((await api.getDiscomStages(value)).stages); } catch (e: any) { setError(e.message); } };
+  useEffect(() => { api.getProjects({ limit: '100' }).then(async result => { setProjects(result.projects); if (result.projects[0]) await loadStages(result.projects[0].id); }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []);
+  const approve = (item: any) => Alert.alert('Approve stage?', item.stageName, [{ text: 'Cancel', style: 'cancel' }, { text: 'Approve', onPress: async () => { try { await api.updateDiscomStageStatus(item.id, { status: 'Approved', approvalDate: new Date().toISOString().slice(0, 10) } as any); await loadStages(projectId); } catch (e: any) { Alert.alert('Could not update stage', e.message); } } }]);
+  return <Screen title="DISCOM Liaison" subtitle="Approvals, inspection, and net metering" onBack={() => router.back()} action={hasPermission('discom.manage') && projectId ? <HeaderButton onPress={() => router.push({ pathname: '/discom-form', params: { projectId } })} /> : undefined}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <><Card><OptionField label="Project" value={projectId} onChange={value => void loadStages(value)} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /></Card>{stages.length === 0 ? <EmptyState message="No DISCOM stages for this project." /> : stages.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><Text className="flex-1 text-sm font-bold text-slate-900">{item.stageName}</Text><Badge text={item.status} tone={item.status === 'Approved' ? 'green' : item.status === 'Rejected' ? 'rose' : 'amber'} /></View>{item.applicationReferenceNo ? <Text className="mt-2 text-xs text-slate-500">Ref: {item.applicationReferenceNo}</Text> : null}{item.submissionDate ? <Text className="mt-1 text-xs text-slate-500">Submitted {formatDate(item.submissionDate)}</Text> : null}{hasPermission('discom.manage') && item.status !== 'Approved' ? <Pressable onPress={() => approve(item)} className="mt-3 self-end"><Text className="text-xs font-semibold text-emerald-700">Mark Approved</Text></Pressable> : null}</Card>)}</>}</Screen>;
+}
