@@ -256,6 +256,7 @@ export interface ProjectExpense {
   id: string;
   tenantId?: string;
   customId: string; // e.g. EXP-2026-00001
+  customerId: string;
   projectId: string;
   expenseCategory: string;
   expenseName: string;
