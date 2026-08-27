@@ -9,9 +9,10 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sun, Mail, Lock, Eye, EyeOff, ArrowRight, Building2, User } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Building2, User } from 'lucide-react-native';
 import { useAuth } from '../src/context/AuthContext';
 
 const DEMO_ACCOUNTS = [
@@ -67,10 +68,13 @@ export default function LoginScreen() {
         >
           {/* Brand */}
           <View className="items-center mb-8">
-            <View className="w-14 h-14 rounded-2xl bg-amber-500 items-center justify-center mb-3">
-              <Sun size={28} color="#020617" />
+            <View className="w-full max-w-sm h-28 rounded-2xl bg-slate-50 items-center justify-center px-4 mb-3 border border-slate-700">
+              <Image
+                source={require('../assets/branding/brand-wordmark-trimmed.png')}
+                className="w-full h-24"
+                resizeMode="contain"
+              />
             </View>
-            <Text className="text-white text-2xl font-bold">SolarOS</Text>
             <Text className="text-slate-400 text-xs mt-1 text-center">
               Multi-Tenant Solar EPC ERP &amp; Customer Portal
             </Text>

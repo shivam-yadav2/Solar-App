@@ -55,8 +55,10 @@ export async function setActiveTenantId(tenantId: string | null): Promise<void> 
 /** Hydrate the in-memory cache from secure storage. Call once on app boot. */
 export async function restoreSession(): Promise<{ token: string | null }> {
   try {
-    cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
-    cachedTenantId = await SecureStore.getItemAsync(TENANT_KEY);
+    [cachedToken, cachedTenantId] = await Promise.all([
+      SecureStore.getItemAsync(TOKEN_KEY),
+      SecureStore.getItemAsync(TENANT_KEY),
+    ]);
   } catch {
     cachedToken = null;
     cachedTenantId = null;

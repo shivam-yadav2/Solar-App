@@ -5,13 +5,13 @@
     "scheme": "solaros",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/brand-app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "backgroundColor": "#0f172a",
       "resizeMode": "contain",
-      "image": "./assets/splash-icon.png"
+      "image": "./assets/branding/brand-splash-3d.png"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,21 +22,27 @@
       "package": "com.solaros.mobile",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#0f172a",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#f8fafc",
+        "foregroundImage": "./assets/branding/brand-mark.png",
+        "monochromeImage": "./assets/branding/brand-mark.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/branding/brand-app-icon.png",
       "bundler": "metro"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-status-bar",
+        {
+          "hidden": false,
+          "style": "light"
+        }
+      ]
     ],
     "extra": {
       "apiBaseUrl": "https://solaros.voidlayer.in/api"

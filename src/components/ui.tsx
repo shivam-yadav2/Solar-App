@@ -13,7 +13,7 @@ export const Screen: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, subtitle, refreshing, onRefresh, onBack, action, children }) => (
-  <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+  <SafeAreaView className="flex-1 bg-slate-50" edges={[]}>
     <ScrollView
       contentContainerClassName="p-4 pb-8"
       refreshControl={

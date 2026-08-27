@@ -174,6 +174,9 @@ export interface SolarProject {
   tenantId?: string;
   customId: string; // e.g. SOL-2026-00001
   customerId: string;
+  customerName?: string;
+  customerCustomId?: string;
+  customerMobile?: string;
   projectName: string;
   status: ProjectStatus;
   installationAddress: string;

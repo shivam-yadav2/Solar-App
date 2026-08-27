@@ -42,11 +42,12 @@ export default function ProjectsScreen() {
           <Pressable key={p.id} onPress={() => router.push({ pathname: '/project/[id]', params: { id: p.id } })}>
           <Card>
             <View className="flex-row justify-between items-start mb-2">
-              <Text className="text-[10px] font-mono text-slate-400">{p.customId}</Text>
+              <Text className="text-[10px] font-mono text-slate-400">{p.customerCustomId || p.customId}</Text>
               <Badge text={p.status ?? 'Draft'} tone={statusTone(p.status)} />
             </View>
 
-            <Text className="text-base font-bold text-slate-900">{p.projectName}</Text>
+            <Text className="text-base font-bold text-slate-900">{p.customerName || 'Unknown Customer'}</Text>
+            <Text className="text-xs font-semibold text-slate-600 mt-0.5">{p.customId} · {p.projectName}</Text>
             <Text className="text-xs text-slate-500 mt-0.5">
               {p.city}
               {p.state ? `, ${p.state}` : ''}

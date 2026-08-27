@@ -40,6 +40,7 @@ import {
   clearSession,
   emitAuthExpired,
 } from './session';
+import { queryClient } from './queryClient';
 
 /**
  * Unlike the web app (where the Express server serves the SPA and the API
@@ -118,6 +119,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status);
   }
 
+  if ((options.method || 'GET').toUpperCase() !== 'GET') {
+    void queryClient.invalidateQueries();
+  }
+
   return data as T;
 }
 
@@ -147,6 +152,7 @@ export const api = {
   // ---- Dashboard / analytics ----
   getDashboardKpis: () => request<{ kpis: any }>('/analytics/dashboard'),
   getCharts: () => request<{ monthlyData: any[]; capacityDistribution: any[]; statusDistribution: any[]; complaintDistribution: any[] }>('/analytics/charts'),
+  getCustomerProfitability: () => request<{ customers: any[]; summary: any }>('/analytics/profitability/customers'),
 
   // ---- Customers ----
   getCustomers: (params: Record<string, string> = {}) =>
@@ -234,6 +240,7 @@ export const api = {
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new ApiError((data as any).error || 'Failed to upload file', response.status);
+    void queryClient.invalidateQueries();
     return data as { fileId: string; fileName: string; fileSize: number; mimeType: string };
   },
 

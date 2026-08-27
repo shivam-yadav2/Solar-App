@@ -7,6 +7,7 @@ import {
   onAuthExpired,
 } from '../lib/session';
 import type { User, Customer, Tenant } from '../types';
+import { queryClient } from '../lib/queryClient';
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(async () => {
     await clearSession();
+    queryClient.clear();
     setUser(null);
     setCustomer(null);
     setTenant(null);
@@ -70,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (emailOrUsername: string, password: string) => {
     setIsLoading(true);
     try {
+      queryClient.clear();
       const res = await api.login({ emailOrUsername, password });
       setUser(res.user);
       setCustomer(res.customer ?? null);
@@ -88,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const switchTenantScope = useCallback(async (tenantId: string | null) => {
+    queryClient.clear();
     await setActiveTenantId(tenantId);
     await refreshUser();
   }, [refreshUser]);
@@ -95,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const impersonateTenant = useCallback(async (tenantId: string) => {
     setIsLoading(true);
     try {
+      queryClient.clear();
       const result = await api.impersonateSaaSTenant(tenantId);
       setUser(result.user);
       setTenant(result.tenant);

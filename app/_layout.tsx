@@ -3,8 +3,11 @@ import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform } from 'react-native';
+import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { AppTopBar } from '../src/components/AppTopBar';
+import { queryClient } from '../src/lib/queryClient';
 
 /**
  * Redirects between the auth screen and the app shell based on session
@@ -29,28 +32,43 @@ function AuthGate() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-950">
+      <View className="flex-1 items-center justify-center bg-black">
         <ActivityIndicator size="large" color="#f59e0b" />
       </View>
     );
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(screens)" />
-    </Stack>
+    <View className="flex-1 bg-slate-950">
+      {isAuthenticated ? <AppTopBar /> : null}
+      <View className="flex-1">
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(screens)" />
+        </Stack>
+      </View>
+    </View>
   );
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = AppState.addEventListener('change', (status) => {
+      focusManager.setFocused(status === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <AuthGate />
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <StatusBar style="light" animated />
+          <AuthGate />
+        </AuthProvider>
+      </QueryClientProvider>
     </SafeAreaProvider>
   );
 }
