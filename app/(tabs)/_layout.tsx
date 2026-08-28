@@ -24,6 +24,7 @@ export default function TabsLayout() {
           backgroundColor: '#ffffff',
           borderTopColor: '#e2e8f0',
         },
+        tabBarHideOnKeyboard: true,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
     >

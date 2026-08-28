@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, Pressable, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { View, Text, ActivityIndicator, Pressable, RefreshControl, TextInput } from 'react-native';
 import { ArrowLeft, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 /** Page chrome shared by every screen: title, subtitle, pull-to-refresh. */
 export const Screen: React.FC<{
@@ -14,8 +15,11 @@ export const Screen: React.FC<{
   children: React.ReactNode;
 }> = ({ title, subtitle, refreshing, onRefresh, onBack, action, children }) => (
   <SafeAreaView className="flex-1 bg-slate-50" edges={[]}>
-    <ScrollView
-      contentContainerClassName="p-4 pb-8"
+    <KeyboardAwareScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+      bottomOffset={28}
+      keyboardDismissMode="on-drag"
       refreshControl={
         onRefresh ? (
           <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor="#f59e0b" />
@@ -36,7 +40,7 @@ export const Screen: React.FC<{
         {action}
       </View>
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   </SafeAreaView>
 );
 

@@ -1,19 +1,35 @@
 import '../global.css';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator, AppState, Platform } from 'react-native';
+import { View, Image, AppState, Platform, StyleSheet } from 'react-native';
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppTopBar } from '../src/components/AppTopBar';
 import { queryClient } from '../src/lib/queryClient';
 
 SplashScreen.setOptions({
-  duration: 650,
+  duration: 400,
   fade: true,
 });
+
+const BOOT_SPLASH_BACKGROUND = '#050C1C';
+const MINIMUM_NATIVE_SPLASH_MS = 450;
+
+function AppBootSplash() {
+  return (
+    <View style={styles.bootSplash}>
+      <Image
+        source={require('../assets/branding/brand-splash-3d-seamless-v2.jpg')}
+        style={styles.bootSplashImage}
+        resizeMode="contain"
+      />
+    </View>
+  );
+}
 
 /**
  * Redirects between the auth screen and the app shell based on session
@@ -24,9 +40,16 @@ function AuthGate() {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [minimumSplashElapsed, setMinimumSplashElapsed] = useState(Platform.OS === 'web');
 
   useEffect(() => {
-    if (isLoading) return;
+    if (Platform.OS === 'web') return;
+    const timer = setTimeout(() => setMinimumSplashElapsed(true), MINIMUM_NATIVE_SPLASH_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || !minimumSplashElapsed) return;
     const inAuthGroup = segments[0] === 'login';
 
     if (!isAuthenticated && !inAuthGroup) {
@@ -34,14 +57,10 @@ function AuthGate() {
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)/dashboard');
     }
-  }, [isAuthenticated, isLoading, segments, router]);
+  }, [isAuthenticated, isLoading, minimumSplashElapsed, segments, router]);
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-black">
-        <ActivityIndicator size="large" color="#f59e0b" />
-      </View>
-    );
+  if (isLoading || !minimumSplashElapsed) {
+    return <AppBootSplash />;
   }
 
   return (
@@ -69,12 +88,28 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <StatusBar style="light" animated />
-          <AuthGate />
-        </AuthProvider>
-      </QueryClientProvider>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <StatusBar style="light" animated />
+            <AuthGate />
+          </AuthProvider>
+        </QueryClientProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  bootSplash: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BOOT_SPLASH_BACKGROUND,
+  },
+  bootSplashImage: {
+    width: '100%',
+    maxWidth: 520,
+    aspectRatio: 1,
+  },
+});

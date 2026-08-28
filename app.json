@@ -5,27 +5,28 @@
     "scheme": "solaros",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/branding/brand-app-icon-3d.png",
+    "icon": "./assets/branding/brand-app-icon-v3.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.solaros.mobile",
       "buildNumber": "1",
-      "icon": "./assets/branding/brand-app-icon-3d.png"
+      "icon": "./assets/branding/brand-app-icon-v3.png"
     },
     "android": {
       "package": "com.solaros.mobile",
       "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#020617",
-        "foregroundImage": "./assets/branding/brand-app-icon-3d.png",
-        "monochromeImage": "./assets/branding/brand-mark.png"
+        "backgroundColor": "#071426",
+        "foregroundImage": "./assets/branding/brand-adaptive-foreground-v3.png",
+        "monochromeImage": "./assets/branding/brand-adaptive-monochrome-v3.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/branding/brand-app-icon-3d.png",
+      "favicon": "./assets/branding/brand-app-icon-v3.png",
       "bundler": "metro"
     },
     "plugins": [
@@ -42,13 +43,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#020617",
-          "image": "./assets/branding/brand-splash-3d.png",
-          "imageWidth": 280,
-          "resizeMode": "contain",
+          "backgroundColor": "#050C1C",
           "dark": {
-            "backgroundColor": "#020617",
-            "image": "./assets/branding/brand-splash-3d.png"
+            "backgroundColor": "#050C1C"
           }
         }
       ]

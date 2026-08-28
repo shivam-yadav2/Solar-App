@@ -4,15 +4,13 @@ import {
   Text,
   TextInput,
   Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Building2, User } from 'lucide-react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '../src/context/AuthContext';
 
 const DEMO_ACCOUNTS = [
@@ -58,19 +56,24 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-950" edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 32,
+          paddingBottom: 56,
+        }}
+        bottomOffset={28}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerClassName="grow justify-center px-6 py-8"
-          keyboardShouldPersistTaps="handled"
-        >
           {/* Brand */}
           <View className="items-center mb-8">
             <View className="w-36 h-36 rounded-[32px] overflow-hidden mb-4 border border-slate-700 bg-slate-900">
               <Image
-                source={require('../assets/branding/brand-login-3d.jpg')}
+                source={require('../assets/branding/brand-login-icon-v3.jpg')}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -169,8 +172,7 @@ export default function LoginScreen() {
               </Pressable>
             ))}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

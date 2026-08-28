@@ -188,11 +188,23 @@ read checks plus lead/quotation mutation lifecycles.
 `EXPO_PUBLIC_API_URL` first and falls back to `expo.extra.apiBaseUrl` in
 `app.json` (`10.0.2.2` remains the Android-emulator default).
 
-**Branding:** the native launcher uses `brand-app-icon-3d.png`; the Expo SDK 57
-`expo-splash-screen` config plugin displays `brand-splash-3d.png` on the dark
-brand background; login shows the lightweight 3D brand tile and wordmark; and
-the authenticated root layout keeps the SolarOS wordmark in the top-left on
-every tab and detail screen. The dark status bar remains globally configured.
+**Branding:** the launcher uses a simple high-contrast mark with a golden sun,
+deep-blue panel cells, and yellow panel dividers: opaque `brand-app-icon-v3.png`
+for iOS/legacy surfaces, transparent safe-zone
+`brand-adaptive-foreground-v3.png` for Android adaptive masks, plus a matching
+monochrome layer. The native Expo splash is background-only to avoid Android
+system cropping, then hands off seamlessly to a borderless custom boot screen
+that preserves the existing 3D SolarOS plinth artwork via
+`brand-splash-3d-seamless-v2.jpg`. Login uses the lightweight v3 launcher tile
+and wordmark; authenticated screens retain the SolarOS wordmark at top-left.
+The dark status bar remains globally configured.
+
+**Keyboard handling:** `react-native-keyboard-controller` 1.21.9 is mounted via
+`KeyboardProvider`. The shared `Screen` and standalone login both use
+`KeyboardAwareScrollView`, covering all 26 input-bearing routes so focused
+fields automatically scroll above the keyboard. Android explicitly uses
+`softwareKeyboardLayoutMode: resize` (required by the controller architecture),
+and bottom tabs hide while the keyboard is open.
 
 ---
 
