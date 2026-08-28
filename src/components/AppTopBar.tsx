@@ -13,22 +13,21 @@ export const AppTopBar: React.FC = () => {
   return (
     <SafeAreaView className="bg-black" edges={['top']}>
       <View className="h-14 px-4 flex-row items-center border-b border-slate-800 bg-slate-950">
-        <View className="w-9 h-9 rounded-xl bg-amber-500 items-center justify-center overflow-hidden">
-          {remoteLogo ? (
-            <Image source={{ uri: remoteLogo }} className="w-9 h-9" resizeMode="contain" />
-          ) : (
-            <Image
-              source={require('../../assets/branding/brand-mark.png')}
-              className="w-8 h-8"
-              resizeMode="contain"
-            />
-          )}
+        <View className="w-28 h-9 rounded-lg bg-slate-50 px-2 py-1 items-center justify-center overflow-hidden">
+          <Image
+            source={require('../../assets/branding/brand-wordmark-mobile.png')}
+            className="w-full h-full"
+            resizeMode="contain"
+          />
         </View>
 
         <View className="flex-1 ml-3 mr-2">
-          <Text className="text-white text-sm font-bold" numberOfLines={1}>
-            {tenant?.name || 'SolarOS'}
-          </Text>
+          <View className="flex-row items-center gap-1.5">
+            {remoteLogo ? <Image source={{ uri: remoteLogo }} className="w-4 h-4 rounded" resizeMode="contain" /> : null}
+            <Text className="flex-1 text-white text-xs font-bold" numberOfLines={1}>
+              {tenant?.name || (user?.role === 'SUPER_ADMIN' ? 'Platform Console' : 'SolarOS Workspace')}
+            </Text>
+          </View>
           <Text className="text-slate-400 text-[10px]" numberOfLines={1}>
             {user?.role === 'CUSTOMER' ? 'Customer Portal' : 'Solar EPC Operations'}
           </Text>

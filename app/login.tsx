@@ -68,10 +68,17 @@ export default function LoginScreen() {
         >
           {/* Brand */}
           <View className="items-center mb-8">
-            <View className="w-full max-w-sm h-28 rounded-2xl bg-slate-50 items-center justify-center px-4 mb-3 border border-slate-700">
+            <View className="w-36 h-36 rounded-[32px] overflow-hidden mb-4 border border-slate-700 bg-slate-900">
               <Image
-                source={require('../assets/branding/brand-wordmark-trimmed.png')}
-                className="w-full h-24"
+                source={require('../assets/branding/brand-login-3d.jpg')}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            </View>
+            <View className="w-full max-w-sm h-20 rounded-2xl bg-slate-50 items-center justify-center px-4 mb-3 border border-slate-700">
+              <Image
+                source={require('../assets/branding/brand-wordmark-mobile.png')}
+                className="w-full h-16"
                 resizeMode="contain"
               />
             </View>

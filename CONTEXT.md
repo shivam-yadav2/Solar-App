@@ -150,11 +150,10 @@ search trigger, `input{font-size:16px}` under 768px to stop iOS zoom-on-focus,
 bottom-sheet modals across all 19 modals, and `lg:hidden` card layouts for the
 five raw-`<table>` views (Projects, Expenses, Invoices, TeamUsers, ProfitMargins).
 
+**Done since this note was first written:** the web `index.html` now includes
+`viewport-fit=cover`, so safe-area styles work on notched devices.
+
 **Not done:**
-- **`viewport-fit=cover` is missing from `index.html`.** Confirmed absent. Without
-  it the `env(safe-area-inset-bottom)` on the bottom tab bar evaluates to 0, so on
-  a notched iPhone the tab bar sits under the home indicator. **One-line fix,
-  worth doing first.**
 - Phase 3: consistent ≥44px tap targets; sticky action bars in the long detail modals.
 - Phase 4: full mobile+desktop regression sweep (customer portal and the SaaS
   screens were never checked at 390px).
@@ -188,6 +187,12 @@ read checks plus lead/quotation mutation lifecycles.
 **Connectivity:** CORS is enabled in `../SAAS-Solar/server.ts`. The client reads
 `EXPO_PUBLIC_API_URL` first and falls back to `expo.extra.apiBaseUrl` in
 `app.json` (`10.0.2.2` remains the Android-emulator default).
+
+**Branding:** the native launcher uses `brand-app-icon-3d.png`; the Expo SDK 57
+`expo-splash-screen` config plugin displays `brand-splash-3d.png` on the dark
+brand background; login shows the lightweight 3D brand tile and wordmark; and
+the authenticated root layout keeps the SolarOS wordmark in the top-left on
+every tab and detail screen. The dark status bar remains globally configured.
 
 ---
 

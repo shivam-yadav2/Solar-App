@@ -2,12 +2,18 @@ import '../global.css';
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, AppState, Platform } from 'react-native';
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppTopBar } from '../src/components/AppTopBar';
 import { queryClient } from '../src/lib/queryClient';
+
+SplashScreen.setOptions({
+  duration: 650,
+  fade: true,
+});
 
 /**
  * Redirects between the auth screen and the app shell based on session
