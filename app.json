@@ -44,8 +44,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#050C1C",
+          "image": "./assets/branding/brand-app-mark-v3.png",
+          "imageWidth": 200,
           "dark": {
-            "backgroundColor": "#050C1C"
+            "backgroundColor": "#050C1C",
+            "image": "./assets/branding/brand-app-mark-v3.png"
           }
         }
       ]
