@@ -14,10 +14,10 @@ export const Screen: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, subtitle, refreshing, onRefresh, onBack, action, children }) => (
-  <SafeAreaView className="flex-1 bg-slate-50" edges={[]}>
+  <SafeAreaView className="flex-1 bg-[#f6f8fb]" edges={[]}>
     <KeyboardAwareScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+      contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 20, paddingBottom: 40 }}
       bottomOffset={28}
       keyboardDismissMode="on-drag"
       refreshControl={
@@ -27,15 +27,15 @@ export const Screen: React.FC<{
       }
       keyboardShouldPersistTaps="handled"
     >
-      <View className="mb-4 flex-row items-center gap-3">
+      <View className="mb-5 flex-row items-center gap-3">
         {onBack ? (
-          <Pressable onPress={onBack} hitSlop={8} className="w-10 h-10 rounded-xl bg-white border border-slate-200 items-center justify-center">
+          <Pressable onPress={onBack} hitSlop={8} className="w-11 h-11 rounded-2xl bg-white border border-slate-200 items-center justify-center shadow-sm">
             <ArrowLeft size={18} color="#334155" />
           </Pressable>
         ) : null}
         <View className="flex-1">
-          <Text className="text-xl font-bold text-slate-900">{title}</Text>
-          {subtitle ? <Text className="text-xs text-slate-500 mt-0.5">{subtitle}</Text> : null}
+          <Text className="text-[23px] font-bold tracking-tight text-slate-950">{title}</Text>
+          {subtitle ? <Text className="text-[13px] text-slate-500 mt-1">{subtitle}</Text> : null}
         </View>
         {action}
       </View>
@@ -48,7 +48,10 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string }> =
   children,
   className = '',
 }) => (
-  <View className={`bg-white rounded-2xl border border-slate-200 p-4 mb-3 ${className}`}>
+  <View
+    className={`bg-white rounded-[20px] border border-slate-200/80 p-4 mb-3 shadow-sm ${className}`}
+    style={{ shadowColor: '#0f172a', shadowOpacity: 0.045, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 }}
+  >
     {children}
   </View>
 );
@@ -61,9 +64,12 @@ export const StatCard: React.FC<{
   accent?: string;
 }> = ({ label, value, hint, accent = 'text-slate-900' }) => (
   <Card>
-    <Text className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{label}</Text>
-    <Text className={`text-2xl font-bold mt-1 ${accent}`}>{value}</Text>
-    {hint ? <Text className="text-[11px] text-slate-400 mt-1">{hint}</Text> : null}
+    <View className="flex-row items-center justify-between">
+      <Text className="text-[11px] font-bold text-slate-500 uppercase tracking-[1.2px]">{label}</Text>
+      <View className="h-1.5 w-7 rounded-full bg-amber-400" />
+    </View>
+    <Text className={`text-[27px] font-extrabold mt-2 tracking-tight ${accent}`}>{value}</Text>
+    {hint ? <Text className="text-xs text-slate-400 mt-1">{hint}</Text> : null}
   </Card>
 );
 
@@ -98,7 +104,7 @@ export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = (
     <Text className="text-sm font-semibold text-rose-600 mb-1">Couldn't load data</Text>
     <Text className="text-xs text-slate-500">{message}</Text>
     {onRetry ? (
-      <Pressable onPress={onRetry} className="mt-3 bg-slate-900 rounded-lg py-2 items-center">
+    <Pressable onPress={onRetry} className="mt-4 min-h-11 bg-slate-900 rounded-xl py-3 items-center justify-center active:bg-slate-700">
         <Text className="text-white text-xs font-semibold">Retry</Text>
       </Pressable>
     ) : null}
@@ -107,7 +113,7 @@ export const ErrorState: React.FC<{ message: string; onRetry?: () => void }> = (
 
 export const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <Card>
-    <Text className="text-xs text-slate-400 text-center py-6">{message}</Text>
+    <Text className="text-sm text-slate-400 text-center py-7">{message}</Text>
   </Card>
 );
 
@@ -127,7 +133,7 @@ export const SearchField: React.FC<{
       placeholderTextColor="#94a3b8"
       autoCapitalize="none"
       autoCorrect={false}
-      className="bg-white border border-slate-200 rounded-xl text-base text-slate-900 pl-10 pr-3 py-3"
+    className="bg-white border border-slate-200 rounded-2xl text-base text-slate-900 pl-11 pr-3 py-3.5 min-h-12"
     />
   </View>
 );
@@ -140,14 +146,14 @@ export const PrimaryButton: React.FC<{
   <Pressable
     onPress={onPress}
     disabled={disabled}
-    className={`rounded-xl px-4 py-3 items-center ${disabled ? 'bg-slate-300' : 'bg-slate-900 active:bg-slate-700'}`}
+    className={`rounded-2xl px-4 py-3.5 min-h-12 items-center justify-center ${disabled ? 'bg-slate-300' : 'bg-slate-900 active:bg-slate-700'}`}
   >
     <Text className="text-white text-sm font-semibold">{label}</Text>
   </Pressable>
 );
 
 export const HeaderButton: React.FC<{ label?: string; onPress: () => void }> = ({ label = 'Add', onPress }) => (
-  <Pressable onPress={onPress} className="min-h-10 bg-slate-900 rounded-xl px-3 items-center justify-center active:bg-slate-700">
+  <Pressable onPress={onPress} className="min-h-11 bg-slate-900 rounded-2xl px-4 items-center justify-center active:bg-slate-700">
     <Text className="text-xs font-semibold text-white">{label}</Text>
   </Pressable>
 );
@@ -163,7 +169,7 @@ export const FormField: React.FC<{
   secureTextEntry?: boolean;
 }> = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline, required, secureTextEntry }) => (
   <View className="mb-4">
-    <Text className="text-xs font-semibold text-slate-600 mb-1.5">{label}{required ? ' *' : ''}</Text>
+    <Text className="text-xs font-bold text-slate-600 mb-2">{label}{required ? ' *' : ''}</Text>
     <TextInput
       value={value}
       onChangeText={onChangeText}
@@ -173,7 +179,7 @@ export const FormField: React.FC<{
       multiline={multiline}
       secureTextEntry={secureTextEntry}
       autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
-      className={`bg-white border border-slate-200 rounded-xl text-base text-slate-900 px-3 py-3 ${multiline ? 'min-h-24' : ''}`}
+      className={`bg-white border border-slate-200 rounded-2xl text-base text-slate-900 px-4 py-3.5 min-h-12 ${multiline ? 'min-h-28' : ''}`}
     />
   </View>
 );
@@ -188,7 +194,7 @@ export const ChoiceField: React.FC<{
     <Text className="text-xs font-semibold text-slate-600 mb-2">{label}</Text>
     <View className="flex-row flex-wrap gap-2">
       {options.map(option => (
-        <Pressable key={option} onPress={() => onChange(option)} className={`rounded-lg border px-3 py-2 ${value === option ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
+        <Pressable key={option} onPress={() => onChange(option)} className={`rounded-xl border px-4 py-2.5 min-h-11 justify-center ${value === option ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
           <Text className={`text-xs font-semibold ${value === option ? 'text-amber-800' : 'text-slate-600'}`}>{option}</Text>
         </Pressable>
       ))}
@@ -206,7 +212,7 @@ export const OptionField: React.FC<{
     <Text className="text-xs font-semibold text-slate-600 mb-2">{label}</Text>
     <View className="gap-2">
       {options.map(option => (
-        <Pressable key={option.value} onPress={() => onChange(option.value)} className={`rounded-xl border px-3 py-3 ${value === option.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
+        <Pressable key={option.value} onPress={() => onChange(option.value)} className={`rounded-2xl border px-4 py-3.5 min-h-12 justify-center ${value === option.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
           <Text className={`text-xs font-semibold ${value === option.value ? 'text-amber-800' : 'text-slate-700'}`}>{option.label}</Text>
         </Pressable>
       ))}

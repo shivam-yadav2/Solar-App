@@ -4,7 +4,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Image, AppState, Platform, StyleSheet } from 'react-native';
+import { View, Text, Image, AppState, Platform, StyleSheet } from 'react-native';
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
@@ -16,17 +16,19 @@ SplashScreen.setOptions({
   fade: true,
 });
 
-const BOOT_SPLASH_BACKGROUND = '#050C1C';
+const BOOT_SPLASH_BACKGROUND = '#071426';
 const MINIMUM_NATIVE_SPLASH_MS = 450;
 
 function AppBootSplash() {
   return (
     <View style={styles.bootSplash}>
       <Image
-        source={require('../assets/branding/brand-splash-3d-seamless-v2.jpg')}
+        source={require('../assets/branding/brand-adaptive-foreground-v3.png')}
         style={styles.bootSplashImage}
         resizeMode="contain"
       />
+      <Text style={styles.bootSplashTitle}>SolarOS</Text>
+      <Text style={styles.bootSplashSubtitle}>Solar operations, simplified</Text>
     </View>
   );
 }
@@ -108,8 +110,20 @@ const styles = StyleSheet.create({
     backgroundColor: BOOT_SPLASH_BACKGROUND,
   },
   bootSplashImage: {
-    width: '100%',
-    maxWidth: 520,
-    aspectRatio: 1,
+    width: 240,
+    height: 240,
+    marginBottom: 2,
+  },
+  bootSplashTitle: {
+    color: '#f8fafc',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+  },
+  bootSplashSubtitle: {
+    color: '#93a4bc',
+    fontSize: 12,
+    marginTop: 6,
+    letterSpacing: 0.3,
   },
 });

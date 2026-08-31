@@ -11,24 +11,26 @@ export const AppTopBar: React.FC = () => {
   const remoteLogo = tenant?.branding?.logoUrl?.trim();
 
   return (
-    <SafeAreaView className="bg-black" edges={['top']}>
-      <View className="h-14 px-4 flex-row items-center border-b border-slate-800 bg-slate-950">
-        <View className="w-28 h-9 rounded-lg bg-slate-50 px-2 py-1 items-center justify-center overflow-hidden">
+    <SafeAreaView className="bg-[#071426]" edges={['top']}>
+      <View className="h-16 px-4 flex-row items-center border-b border-[#20304a] bg-[#0b1b31]">
+        <View className="w-9 h-9 rounded-xl bg-[#102846] items-center justify-center overflow-hidden">
           <Image
-            source={require('../../assets/branding/brand-wordmark-mobile.png')}
+            source={require('../../assets/branding/brand-adaptive-foreground-v3.png')}
             className="w-full h-full"
             resizeMode="contain"
           />
         </View>
 
-        <View className="flex-1 ml-3 mr-2">
+        <Text className="ml-2 text-white text-base font-extrabold tracking-tight">SolarOS</Text>
+
+        <View className="flex-1 ml-3 mr-3">
           <View className="flex-row items-center gap-1.5">
-            {remoteLogo ? <Image source={{ uri: remoteLogo }} className="w-4 h-4 rounded" resizeMode="contain" /> : null}
-            <Text className="flex-1 text-white text-xs font-bold" numberOfLines={1}>
+            {remoteLogo ? <Image source={{ uri: remoteLogo }} className="w-4 h-4 rounded-md" resizeMode="contain" /> : null}
+            <Text className="flex-1 text-slate-100 text-xs font-bold" numberOfLines={1}>
               {tenant?.name || (user?.role === 'SUPER_ADMIN' ? 'Platform Console' : 'SolarOS Workspace')}
             </Text>
           </View>
-          <Text className="text-slate-400 text-[10px]" numberOfLines={1}>
+          <Text className="text-slate-400 text-[10px] mt-0.5" numberOfLines={1}>
             {user?.role === 'CUSTOMER' ? 'Customer Portal' : 'Solar EPC Operations'}
           </Text>
         </View>
@@ -38,7 +40,7 @@ export const AppTopBar: React.FC = () => {
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="Open notifications"
-          className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 items-center justify-center active:bg-slate-800"
+          className="w-11 h-11 rounded-2xl bg-[#102846] border border-[#29415f] items-center justify-center active:bg-[#173554]"
         >
           <Bell size={18} color="#f8fafc" />
         </Pressable>

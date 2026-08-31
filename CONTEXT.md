@@ -193,10 +193,11 @@ deep-blue panel cells, and yellow panel dividers: opaque `brand-app-icon-v3.png`
 for iOS/legacy surfaces, transparent safe-zone
 `brand-adaptive-foreground-v3.png` for Android adaptive masks, plus a matching
 monochrome layer. The native Expo splash is background-only to avoid Android
-system cropping, then hands off seamlessly to a borderless custom boot screen
-that preserves the existing 3D SolarOS plinth artwork via
-`brand-splash-3d-seamless-v2.jpg`. Login uses the lightweight v3 launcher tile
-and wordmark; authenticated screens retain the SolarOS wordmark at top-left.
+system cropping, then hands off to a clean custom boot screen. It uses the
+transparent mark, SolarOS wordmark, and a
+short product tagline (no image card or cropped plinth). Login uses the
+lightweight v3 launcher tile and wordmark; authenticated screens retain the
+SolarOS wordmark at top-left.
 The dark status bar remains globally configured.
 
 **Keyboard handling:** `react-native-keyboard-controller` 1.21.9 is mounted via
@@ -205,6 +206,14 @@ The dark status bar remains globally configured.
 fields automatically scroll above the keyboard. Android explicitly uses
 `softwareKeyboardLayoutMode: resize` (required by the controller architecture),
 and bottom tabs hide while the keyboard is open.
+
+**Mobile home dashboard:** the default tab is now a role-aware mobile overview,
+not just a KPI list. Tenant users see financial snapshot, collection progress,
+operational pulse, quick actions, and receivables/site follow-ups. Customers see
+their capacity, paid/balance summary, warranty and support status, while
+SUPER_ADMIN sees tenant/MRR/growth footprint metrics. All cards are calculated
+from the existing dashboard/customer analytics responses and quick actions use
+the existing app routes.
 
 ---
 

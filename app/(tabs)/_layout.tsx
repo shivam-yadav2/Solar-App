@@ -22,10 +22,19 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: '#94a3b8',
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopColor: '#e2e8f0',
+          borderTopColor: '#e6ebf1',
+          height: 72,
+          paddingTop: 7,
+          paddingBottom: 9,
+          elevation: 12,
+          shadowColor: '#0f172a',
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -3 },
         },
         tabBarHideOnKeyboard: true,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        tabBarItemStyle: { paddingVertical: 1 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
       }}
     >
       <Tabs.Screen
