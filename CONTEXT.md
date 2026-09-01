@@ -215,6 +215,23 @@ SUPER_ADMIN sees tenant/MRR/growth footprint metrics. All cards are calculated
 from the existing dashboard/customer analytics responses and quick actions use
 the existing app routes.
 
+**Detail parity and exports:** customer details now expose overview, projects,
+payments, and support tabs; project details expose overview, technical,
+financials, and activity tabs with contextual payment, expense, invoice,
+warranty, and ticket actions. Customer/project list cards also expose their
+common web actions. Payment, expense, warranty, invoice, and ticket forms accept
+customer/project route parameters for contextual prefill. Reports now safely
+handles partial chart responses and guards CSV export state/errors so a missing
+chart or empty dataset cannot crash the native screen.
+
+The operational module parity pass now covers the remaining web workflows:
+Inventory has stock, movement, search, and project BoQ tabs; Payroll has payroll,
+employee, and advance tabs with filters, settlement, batch run, edit/delete, and
+CSV export; DISCOM has project stage progress with approve/reject/hold actions;
+Field Operations has month-filtered attendance plus project DPR history; and
+Warranties, Invoices, and Service Tickets include searchable/filterable lists,
+CSV export where applicable, and ticket detail status/comment workflows.
+
 ---
 
 ## 9. Remaining release work

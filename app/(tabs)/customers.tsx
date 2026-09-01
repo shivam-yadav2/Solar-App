@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable } from 'react-native';
-import { Search, Phone, MapPin } from 'lucide-react-native';
+import { Alert, View, Text, TextInput, Pressable } from 'react-native';
+import { Search, Phone, MapPin, KeyRound, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
 import { useFetch } from '../../src/hooks/useFetch';
@@ -62,14 +62,20 @@ export default function CustomersScreen() {
       ) : customers.length === 0 ? (
         <EmptyState message={debounced ? `No customers match "${debounced}".` : 'No customers yet.'} />
       ) : (
-        customers.map((c) => <CustomerCard key={c.id} customer={c} />)
+        customers.map((c) => <CustomerCard key={c.id} customer={c} canCreateProject={hasPermission('projects.create')} canEdit={hasPermission('customers.edit')} />)
       )}
     </Screen>
   );
 }
 
-function CustomerCard({ customer }: { customer: Customer }) {
+function CustomerCard({ customer, canCreateProject, canEdit }: { customer: Customer; canCreateProject: boolean; canEdit: boolean }) {
   const router = useRouter();
+  const resetCredentials = async () => {
+    try {
+      const result = await api.resetCustomerPassword(customer.id, 'solar123');
+      Alert.alert('Credentials reset', `Username: ${result.username}\nTemporary password: ${result.tempPassword}`);
+    } catch (e: any) { Alert.alert('Could not reset credentials', e?.message || 'Please try again.'); }
+  };
   return (
     <Pressable onPress={() => router.push({ pathname: '/customer/[id]', params: { id: customer.id } })}>
       <Card>
@@ -115,6 +121,7 @@ function CustomerCard({ customer }: { customer: Customer }) {
             </Text>
           </Text>
         </View>
+        {(canCreateProject || canEdit) ? <View className="flex-row gap-2 mt-3"><Pressable onPress={() => router.push({ pathname: '/project-form', params: { customerId: customer.id } })} className="flex-1 min-h-11 rounded-xl bg-amber-500 items-center justify-center flex-row active:bg-amber-400"><Plus size={14} color="#0b0f17" /><Text className="text-xs font-bold text-slate-950 ml-1">Project</Text></Pressable>{canEdit ? <Pressable onPress={() => void resetCredentials()} className="min-h-11 px-3 rounded-xl bg-slate-100 items-center justify-center flex-row active:bg-slate-200"><KeyRound size={14} color="#475569" /><Text className="text-xs font-bold text-slate-700 ml-1">Pass</Text></Pressable> : null}</View> : null}
       </Card>
     </Pressable>
   );

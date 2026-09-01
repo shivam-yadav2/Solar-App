@@ -343,6 +343,7 @@ export const api = {
   createStockMovement: (data: Partial<InventoryStockMovement>) => request<{ movement: InventoryStockMovement }>('/inventory/movements', { method: 'POST', body: JSON.stringify(data) }),
   getProjectBoq: (projectId: string) => request<{ items: ProjectBoqItem[] }>(`/projects/${projectId}/boq`),
   createProjectBoqItem: (projectId: string, data: Partial<ProjectBoqItem>) => request<{ item: ProjectBoqItem }>(`/projects/${projectId}/boq`, { method: 'POST', body: JSON.stringify(data) }),
+  updateProjectBoqItem: (id: string, data: Partial<ProjectBoqItem>) => request<{ success: boolean }>(`/boq/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // ---- Field operations / DISCOM ----
   getAttendance: (month = '') => request<{ records: EmployeeAttendance[]; total: number }>(`/attendance${qs({ month })}`),

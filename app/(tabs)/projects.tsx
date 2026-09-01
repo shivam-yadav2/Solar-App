@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { Plus, Receipt } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
 import { useFetch } from '../../src/hooks/useFetch';
@@ -77,6 +78,7 @@ export default function ProjectsScreen() {
                 </Text>
               </View>
             </View>
+            <View className="flex-row gap-2 mt-3 pt-3 border-t border-slate-100"><Pressable onPress={() => router.push({ pathname: '/payment-form', params: { projectId: p.id } })} className="flex-1 min-h-11 rounded-xl bg-emerald-50 border border-emerald-200 items-center justify-center flex-row active:bg-emerald-100"><Receipt size={14} color="#047857" /><Text className="text-xs font-bold text-emerald-700 ml-1">Pay</Text></Pressable><Pressable onPress={() => router.push({ pathname: '/expense-form', params: { projectId: p.id, customerId: p.customerId } })} className="flex-1 min-h-11 rounded-xl bg-rose-50 border border-rose-200 items-center justify-center flex-row active:bg-rose-100"><Plus size={14} color="#be123c" /><Text className="text-xs font-bold text-rose-700 ml-1">Cost</Text></Pressable></View>
           </Card></Pressable>
         ))
       )}
