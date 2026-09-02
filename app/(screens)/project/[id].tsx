@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowUpRight, CreditCard, FileText, Receipt, ShieldCheck, Ticket, Wrench, Zap } from 'lucide-react-native';
 import { api } from '../../../src/lib/api';
 import { useFetch } from '../../../src/hooks/useFetch';
@@ -14,6 +14,7 @@ export default function ProjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const state = useFetch(() => api.getProject(String(id)), [id]);
+  useFocusEffect(useCallback(() => { void state.reload(); }, [state.reload]));
   const data = state.data;
   const item = data?.project;
   const { hasPermission } = useAuth();
