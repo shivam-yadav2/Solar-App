@@ -184,6 +184,8 @@ export const api = {
     request<{ payments: Payment[]; summary?: any; meta?: PageMeta }>(`/payments${qs(params)}`),
   createPayment: (data: Partial<Payment>) =>
     request<{ payment: Payment }>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+  updatePayment: (id: string, data: Partial<Payment>) =>
+    request<{ payment: Payment }>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   getExpenses: (params: Record<string, string> = {}) =>
     request<{ expenses: ProjectExpense[]; summary?: any; meta?: PageMeta }>(`/expenses${qs(params)}`),
   createExpense: (data: Partial<ProjectExpense>) =>
