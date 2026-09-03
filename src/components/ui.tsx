@@ -207,12 +207,13 @@ export const OptionField: React.FC<{
   value: string;
   options: { label: string; value: string }[];
   onChange: (value: string) => void;
-}> = ({ label, value, options, onChange }) => (
+  disabled?: boolean;
+}> = ({ label, value, options, onChange, disabled }) => (
   <View className="mb-4">
     <Text className="text-xs font-semibold text-slate-600 mb-2">{label}</Text>
-    <View className="gap-2">
+    <View className={`gap-2 ${disabled ? 'opacity-50' : ''}`}>
       {options.map(option => (
-        <Pressable key={option.value} onPress={() => onChange(option.value)} className={`rounded-2xl border px-4 py-3.5 min-h-12 justify-center ${value === option.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
+        <Pressable key={option.value} disabled={disabled} onPress={() => onChange(option.value)} className={`rounded-2xl border px-4 py-3.5 min-h-12 justify-center ${value === option.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-slate-200'}`}>
           <Text className={`text-xs font-semibold ${value === option.value ? 'text-amber-800' : 'text-slate-700'}`}>{option.label}</Text>
         </Pressable>
       ))}
