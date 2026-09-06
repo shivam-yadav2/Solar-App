@@ -10,6 +10,11 @@ import { useAuth } from '../../src/context/AuthContext';
 import { FormField } from '../../src/components/ui';
 import { shareCsv } from '../../src/lib/export';
 
+const equipmentSerialSummary = (invoice: any) => {
+  const panels = Array.isArray(invoice.panelSerialNumbers) ? invoice.panelSerialNumbers.filter(Boolean).join(', ') : '';
+  return [panels ? `Panel serials: ${panels}` : '', invoice.inverterSerial ? `Inverter serial: ${invoice.inverterSerial}` : ''].filter(Boolean).join(' · ');
+};
+
 export default function InvoicesScreen() {
   const router = useRouter(); const state = useFetch(() => api.getInvoices({ limit: '100' }));
   const { hasPermission } = useAuth();
@@ -21,6 +26,8 @@ export default function InvoicesScreen() {
       <StatCard label="Total Invoiced" value={formatINR(state.data?.summary?.totalInvoiced ?? items.reduce((s, i) => s + Number(i.amount || 0), 0))} hint={`GST ${formatINR(state.data?.summary?.totalTax ?? 0)}`} /><FormField label="Search invoices" value={query} onChangeText={setQuery} placeholder="Invoice number or ID" /><View className="mt-2 flex-row gap-2">{['All', 'Issued', 'Paid', 'Cancelled'].map(item => <Text key={item} onPress={() => setStatus(item)} className={`rounded-full border px-3 py-1.5 text-[11px] font-bold ${status === item ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500'}`}>{item}</Text>)}</View>
       {filtered.length === 0 ? <EmptyState message="No invoices match this filter." /> : filtered.map((item) => <Card key={item.id}>
         <View className="flex-row justify-between"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.invoiceNumber}</Text><Text className="text-xs text-slate-500 mt-1">{item.invoiceType} · {formatDate(item.invoiceDate)}</Text></View><Badge text={item.status} tone={item.status === 'Paid' ? 'green' : item.status === 'Cancelled' ? 'rose' : 'amber'} /></View>
+        {(item as any).projectName ? <Text className="text-[11px] text-slate-500 mt-2">Project: {(item as any).projectName}</Text> : null}
+        {equipmentSerialSummary(item) ? <Text className="text-[11px] text-slate-500 mt-1">{equipmentSerialSummary(item)}</Text> : null}
         <Text className="text-xl font-bold text-slate-900 mt-3">{formatINR(item.amount)}</Text>{item.dueDate ? <Text className="text-[11px] text-slate-400 mt-1">Due {formatDate(item.dueDate)}</Text> : null}
       </Card>)}
     </>}

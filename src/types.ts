@@ -327,6 +327,14 @@ export interface Invoice {
   fileName?: string;
   fileSize?: number;
   description?: string;
+  projectName?: string;
+  capacityKw?: number;
+  panelBrand?: string;
+  panelModel?: string;
+  panelSerialNumbers?: string[];
+  inverterBrand?: string;
+  inverterModel?: string;
+  inverterSerial?: string;
   uploadedBy: string;
   createdAt: string;
   updatedAt: string;
@@ -754,6 +762,7 @@ export interface InventoryStockMovement {
   vendorSupplier?: string;
   referenceChallanNo?: string;
   notes?: string;
+  serialNumbers?: string[];
   createdBy: string;
   createdAt: string;
 }
