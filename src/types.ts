@@ -235,6 +235,8 @@ export interface SolarProject {
 
 export type PaymentMethod = 'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Card' | 'Other';
 export type PaymentTransactionStatus = 'Successful' | 'Pending' | 'Failed' | 'Refunded';
+export type PaymentReconciliationStatus = 'Unreconciled' | 'Matched' | 'Exception';
+export type ExpenseApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface Payment {
   id: string;
@@ -242,6 +244,7 @@ export interface Payment {
   customId: string; // e.g. PAY-2026-00001
   customerId: string;
   projectId: string;
+  adjustmentOfId?: string;
   paymentDate: string;
   amount: number;
   paymentMethod: PaymentMethod;
@@ -250,6 +253,10 @@ export interface Payment {
   notes?: string;
   receiptFileId?: string;
   receiptFileName?: string;
+  reconciliationStatus?: PaymentReconciliationStatus;
+  reconciledBy?: string;
+  reconciledAt?: string;
+  reconciliationNote?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -261,6 +268,7 @@ export interface ProjectExpense {
   customId: string; // e.g. EXP-2026-00001
   customerId: string;
   projectId: string;
+  adjustmentOfId?: string;
   expenseCategory: string;
   expenseName: string;
   amount: number;
@@ -270,6 +278,10 @@ export interface ProjectExpense {
   receiptFileId?: string;
   receiptFileName?: string;
   addedBy: string;
+  approvalStatus?: ExpenseApprovalStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  approvalNote?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -290,6 +302,7 @@ export interface WarrantyDocument {
   customId: string; // e.g. WAR-2026-00001
   customerId: string;
   projectId: string;
+  equipmentAssetId?: string;
   itemType: WarrantyItemType;
   warrantyType: WarrantyType;
   periodYears: number;
@@ -763,6 +776,41 @@ export interface InventoryStockMovement {
   referenceChallanNo?: string;
   notes?: string;
   serialNumbers?: string[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export type EquipmentAssetStatus = 'IN_STOCK' | 'DISPATCHED' | 'INSTALLED' | 'RETURNED' | 'REPLACED' | 'WRITTEN_OFF';
+
+export interface EquipmentAsset {
+  id: string;
+  tenantId: string;
+  inventoryItemId?: string;
+  serialNumber: string;
+  equipmentType: InventoryCategory;
+  brand?: string;
+  modelNumber?: string;
+  status: EquipmentAssetStatus;
+  projectId?: string;
+  customerId?: string;
+  dispatchMovementId?: string;
+  installedAt?: string;
+  warrantyExpiry?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EquipmentAssetEvent {
+  id: string;
+  assetId: string;
+  tenantId: string;
+  movementId?: string;
+  projectId?: string;
+  eventType: 'REGISTERED' | 'DISPATCHED' | 'RETURNED' | 'INSTALLED' | 'REPLACED' | 'WRITTEN_OFF';
+  previousStatus?: EquipmentAssetStatus;
+  resultingStatus: EquipmentAssetStatus;
+  notes?: string;
   createdBy: string;
   createdAt: string;
 }

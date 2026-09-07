@@ -34,6 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   const logout = useCallback(async () => {
+    await api.logout();
     await clearSession();
     queryClient.clear();
     setUser(null);

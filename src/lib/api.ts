@@ -142,6 +142,15 @@ export const api = {
     if (res.token) await setToken(res.token);
     return res;
   },
+  logout: async (): Promise<void> => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    } catch {
+      // Local session cleanup still proceeds when the server is unreachable.
+    }
+  },
   getMe: () => request<{ user: User; tenant?: Tenant; customer?: Customer; permissionKeys?: string[] }>('/auth/me'),
   changePassword: (newPassword: string) =>
     request<{ success: boolean }>('/auth/change-password', {
@@ -174,6 +183,7 @@ export const api = {
   getProjects: (params: Record<string, string> = {}) =>
     request<{ projects: SolarProject[]; meta?: PageMeta }>(`/projects${qs(params)}`),
   getProject: (id: string) => request<any>(`/projects/${id}`),
+  getProjectEquipmentAssets: (id: string) => request<{ assets: import('../types').EquipmentAsset[] }>(`/projects/${id}/equipment-assets`),
   createProject: (data: Partial<SolarProject>) =>
     request<{ project: SolarProject }>('/projects', { method: 'POST', body: JSON.stringify(data) }),
   updateProject: (id: string, data: Partial<SolarProject>) =>
@@ -221,6 +231,10 @@ export const api = {
   // ---- Documents ----
   getDocuments: (params: Record<string, string> = {}) =>
     request<{ documents: ProjectDocument[]; meta?: PageMeta }>(`/documents${qs(params)}`),
+  getFileUrl: async (fileId: string): Promise<string> => {
+    const data = await request<{ url: string }>(`/files/${encodeURIComponent(fileId)}/url`);
+    return data.url.startsWith('http') ? data.url : `${API_BASE.replace(/\/api\/?$/, '')}${data.url}`;
+  },
   createDocument: (data: Partial<ProjectDocument>) =>
     request<{ document: ProjectDocument }>('/documents', { method: 'POST', body: JSON.stringify(data) }),
   uploadFile: async (file: NativeUploadFile) => {
