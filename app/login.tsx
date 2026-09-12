@@ -9,28 +9,9 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Building2, User } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAuth } from '../src/context/AuthContext';
-
-const DEMO_ACCOUNTS = [
-  {
-    label: 'Tenant Admin',
-    subtitle: 'Solar EPC Workspace ERP',
-    email: 'admin@suryashaktisolar.com',
-    password: 'admin123',
-    Icon: Building2,
-    tint: '#34d399',
-  },
-  {
-    label: 'Customer',
-    subtitle: 'Self-Service Solar Portal',
-    email: 'amit.sharma@example.com',
-    password: 'customer123',
-    Icon: User,
-    tint: '#60a5fa',
-  },
-];
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -149,29 +130,6 @@ export default function LoginScreen() {
               </>
             )}
           </Pressable>
-
-          {/* Quick demo access — mirrors the web login page */}
-          <View className="mt-8 pt-6 border-t border-slate-800">
-            <Text className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-3">
-              Quick Demo Access
-            </Text>
-            {DEMO_ACCOUNTS.map(({ label, subtitle, email, password: pw, Icon, tint }) => (
-              <Pressable
-                key={label}
-                onPress={() => doLogin(email, pw)}
-                disabled={isSubmitting}
-                className="flex-row items-center gap-3 bg-slate-900 border border-slate-800 active:bg-slate-800 rounded-xl p-3 mb-2"
-              >
-                <View className="w-9 h-9 rounded-lg bg-slate-800 items-center justify-center">
-                  <Icon size={18} color={tint} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-white text-xs font-semibold">{label}</Text>
-                  <Text className="text-slate-400 text-[10px]">{subtitle}</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );
