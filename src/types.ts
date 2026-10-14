@@ -323,6 +323,30 @@ export interface WarrantyDocument {
 export type InvoiceType = 'Tax Invoice' | 'Proforma' | 'Advance Receipt' | 'Final Bill';
 export type InvoiceStatus = 'Issued' | 'Paid' | 'Cancelled';
 
+export type GstRegistrationType = 'Regular' | 'Composition' | 'Unregistered';
+
+export interface GstSettings {
+  enabled: boolean;
+  registrationType: GstRegistrationType;
+  stateCode: string;
+  defaultHsnSacCode: string;
+  defaultTaxRate: number;
+  priceIncludesTax: boolean;
+  invoicePrefix: string;
+}
+
+/** Immutable GST identity and calculation configuration stored with each invoice. */
+export interface GstInvoiceSnapshot extends GstSettings {
+  sellerName: string;
+  sellerAddress: string;
+  sellerState: string;
+  sellerPincode: string;
+  sellerGstin: string;
+  placeOfSupply: string;
+  placeOfSupplyCode: string;
+  supplyType: 'INTRA_STATE' | 'INTER_STATE';
+}
+
 export interface Invoice {
   id: string;
   tenantId?: string;
@@ -334,6 +358,7 @@ export interface Invoice {
   dueDate?: string;
   amount: number;
   taxAmount?: number;
+  gstSnapshot?: GstInvoiceSnapshot;
   invoiceType: InvoiceType;
   status: InvoiceStatus;
   fileId?: string;
@@ -511,6 +536,7 @@ export interface CompanySettings {
   phone: string;
   email: string;
   gstNumber: string;
+  gstSettings: GstSettings;
   website: string;
   googleReviewUrl: string;
   defaultCurrency: string;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ActivityIndicator, Pressable, RefreshControl, TextInput } from 'react-native';
+import { View, Text, ActivityIndicator, Pressable, RefreshControl, Switch, TextInput } from 'react-native';
 import { ArrowLeft, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -199,6 +199,21 @@ export const ChoiceField: React.FC<{
         </Pressable>
       ))}
     </View>
+  </View>
+);
+
+export const ToggleField: React.FC<{
+  label: string;
+  description?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}> = ({ label, description, value, onValueChange }) => (
+  <View className="mb-4 flex-row items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+    <View className="mr-4 flex-1">
+      <Text className="text-xs font-bold text-slate-700">{label}</Text>
+      {description ? <Text className="mt-1 text-[11px] leading-4 text-slate-500">{description}</Text> : null}
+    </View>
+    <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#cbd5e1', true: '#fbbf24' }} thumbColor={value ? '#ffffff' : '#f8fafc'} />
   </View>
 );
 

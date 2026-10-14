@@ -29,8 +29,19 @@ export default function DashboardScreen() {
   const showPlatform = isSuperAdmin && !tenant;
 
   const { data, error, isLoading, isRefreshing, refresh, reload } = useFetch(
-    () => showPlatform ? api.getSaaSAnalytics() : isCustomer && customer ? api.getCustomer(customer.id) : hasPermission('reports.view') ? api.getDashboardKpis() : Promise.resolve({ kpis: null }),
-    [showPlatform, isCustomer, customer?.id, hasPermission('reports.view')]
+    async () => {
+      if (showPlatform) return api.getSaaSAnalytics();
+      if (isCustomer && customer) return api.getCustomer(customer.id);
+      if (!hasPermission('reports.view')) return { kpis: null };
+      const [kpiData, projects, tickets, warranties] = await Promise.all([
+        api.getDashboardKpis(),
+        hasPermission('projects.view') ? api.getProjects({ limit: '5' }) : Promise.resolve({ projects: [] }),
+        hasPermission('complaints.view') ? api.getComplaints({ limit: '5' }) : Promise.resolve({ complaints: [] }),
+        hasPermission('warranties.view') ? api.getWarranties({ limit: '5' }) : Promise.resolve({ warranties: [] }),
+      ]);
+      return { kpis: kpiData.kpis, projects: projects.projects, tickets: tickets.complaints, warranties: warranties.warranties };
+    },
+    [showPlatform, isCustomer, customer?.id, hasPermission('reports.view'), hasPermission('projects.view'), hasPermission('complaints.view'), hasPermission('warranties.view')]
   );
 
   const title = showPlatform ? 'Platform overview' : isCustomer ? 'My solar journey' : 'Solar operations';
@@ -45,7 +56,7 @@ export default function DashboardScreen() {
       ) : isCustomer ? (
         <CustomerHome data={data} name={customer?.name || user?.username || 'there'} onNavigate={path => router.push(path as never)} />
       ) : (
-        <TenantHome data={(data as any)?.kpis ?? data} onNavigate={path => router.push(path as never)} />
+        <TenantHome data={data} onNavigate={path => router.push(path as never)} />
       )}
     </Screen>
   );
@@ -89,14 +100,19 @@ function ProgressRow({ label, value, percent, tone = '#f59e0b' }: { label: strin
   );
 }
 
-function TenantHome({ data, onNavigate }: { data: any; onNavigate: (path: string) => void }) {
-  if (!data) return <Card><Text className="text-sm text-slate-400 text-center py-7">No dashboard data yet.</Text></Card>;
-  const deal = Number(data.totalDealValue || 0);
-  const received = Number(data.totalReceived || 0);
-  const pending = Number(data.pendingReceivables ?? data.totalPending ?? Math.max(0, deal - received));
-  const margin = Number(data.netMargin ?? data.profitMargin ?? data.averageProfitMargin ?? 0);
+function TenantHome({ data: payload, onNavigate }: { data: any; onNavigate: (path: string) => void }) {
+  const kpis = payload?.kpis ?? payload;
+  const data = kpis;
+  if (!kpis) return <Card><Text className="text-sm text-slate-400 text-center py-7">No dashboard data yet.</Text></Card>;
+  const deal = Number(kpis.totalDealValue || 0);
+  const received = Number(kpis.totalReceived || 0);
+  const pending = Number(kpis.pendingReceivables ?? kpis.totalPending ?? Math.max(0, deal - received));
+  const margin = Number(kpis.netMargin ?? kpis.profitMargin ?? kpis.averageProfitMargin ?? 0);
   const collectionRate = deal > 0 ? (received / deal) * 100 : 0;
-  const activeSites = Number(data.inProgressProjects ?? data.activeProjects ?? 0);
+  const activeSites = Number(kpis.inProgressProjects ?? kpis.activeProjects ?? 0);
+  const recentProjects = payload?.projects ?? [];
+  const openTickets = (payload?.tickets ?? []).filter((ticket: any) => !/resolved|closed/i.test(ticket.status));
+  const expiringWarranties = Number(kpis.expiringWarranties ?? 0);
 
   return <>
     <WelcomeHero eyebrow="Workspace pulse" title="Everything in view" detail="Track revenue, collections and the work that needs attention today." icon={<Zap size={21} color="#0b1b31" />}>
@@ -119,6 +135,13 @@ function TenantHome({ data, onNavigate }: { data: any; onNavigate: (path: string
       <ProgressRow label="Received" value={`${collectionRate.toFixed(1)}%`} percent={collectionRate} tone="#10b981" />
       <View className="flex-row gap-3"><View className="flex-1"><Text className="text-[10px] uppercase tracking-wide text-slate-400">Active sites</Text><Text className="text-lg font-extrabold text-slate-900 mt-1">{activeSites}</Text></View><View className="flex-1"><Text className="text-[10px] uppercase tracking-wide text-slate-400">Net margin</Text><Text className="text-lg font-extrabold text-blue-700 mt-1">{margin.toFixed(1)}%</Text></View><View className="flex-1"><Text className="text-[10px] uppercase tracking-wide text-slate-400">Clients</Text><Text className="text-lg font-extrabold text-slate-900 mt-1">{data.totalCustomers ?? data.activeCustomers ?? 0}</Text></View></View>
     </Card>
+
+    <Card>
+      <View className="flex-row items-center justify-between"><View><Text className="text-sm font-extrabold text-slate-900">Recent solar projects</Text><Text className="mt-0.5 text-xs text-slate-500">Live site milestones and balances</Text></View><Pressable onPress={() => onNavigate('/projects')}><Text className="text-xs font-bold text-amber-700">View all</Text></Pressable></View>
+      {recentProjects.length ? recentProjects.map((project: any) => <Pressable key={project.id} onPress={() => onNavigate(`/project/${project.id}`)} className="flex-row items-center border-b border-slate-100 py-3 last:border-b-0"><View className="h-9 w-9 items-center justify-center rounded-xl bg-blue-50"><Zap size={16} color="#2563eb" /></View><View className="ml-3 flex-1"><Text className="text-xs font-bold text-slate-800" numberOfLines={1}>{project.projectName}</Text><Text className="mt-0.5 text-[11px] text-slate-500" numberOfLines={1}>{project.customerName || project.customId} · {project.capacityKw} kWp · {project.status}</Text></View><Text className="text-[11px] font-bold text-slate-700">{formatINR(project.pendingBalance || 0)}</Text></Pressable>) : <Text className="py-4 text-center text-xs text-slate-400">No projects to show yet.</Text>}
+    </Card>
+
+    <View className="flex-row gap-3"><Card className="flex-1"><Pressable onPress={() => onNavigate('/tickets')}><Wrench size={18} color="#e11d48" /><Text className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Open tickets</Text><Text className="mt-1 text-xl font-extrabold text-rose-700">{openTickets.length || kpis.openComplaints || 0}</Text></Pressable></Card><Card className="flex-1"><Pressable onPress={() => onNavigate('/warranties')}><ShieldCheck size={18} color="#059669" /><Text className="mt-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Warranty alerts</Text><Text className="mt-1 text-xl font-extrabold text-emerald-700">{expiringWarranties}</Text></Pressable></Card></View>
 
     <Card>
       <View className="flex-row items-center justify-between"><View><Text className="text-sm font-extrabold text-slate-900">Next best actions</Text><Text className="text-xs text-slate-500 mt-0.5">Keep the operation moving</Text></View><ArrowUpRight size={18} color="#94a3b8" /></View>

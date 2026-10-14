@@ -355,6 +355,7 @@ export const api = {
 
   // ---- Inventory / BoQ ----
   getInventory: () => request<{ items: InventoryItem[]; movements: InventoryStockMovement[]; lowStockCount: number }>('/inventory'),
+  markEquipmentInstalled: (id: string) => request<{ asset: import('../types').EquipmentAsset }>(`/equipment-assets/${id}/install`, { method: 'POST' }),
   createInventoryItem: (data: Partial<InventoryItem>) => request<{ item: InventoryItem }>('/inventory/items', { method: 'POST', body: JSON.stringify(data) }),
   createStockMovement: (data: Partial<InventoryStockMovement>) => request<{ movement: InventoryStockMovement }>('/inventory/movements', { method: 'POST', body: JSON.stringify(data) }),
   getProjectBoq: (projectId: string) => request<{ items: ProjectBoqItem[] }>(`/projects/${projectId}/boq`),
