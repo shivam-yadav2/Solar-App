@@ -41,7 +41,8 @@ import {
   clearSession,
   emitAuthExpired,
 } from './session';
-import { queryClient } from './queryClient';
+import { invalidateFor } from './query';
+import { noteResponse } from './serverState';
 
 /**
  * Unlike the web app (where the Express server serves the SPA and the API
@@ -110,6 +111,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 
   const data = await response.json().catch(() => ({} as any));
+  noteResponse(response.status, data);
 
   // This copy of the app is older than Super Admin's minimum version.
   if (response.status === 426) markUpdateRequired({ message: (data as any).error, updateUrl: (data as any).updateUrl });
@@ -118,17 +120,24 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status);
   }
 
-  if ((options.method || 'GET').toUpperCase() !== 'GET') {
-    void queryClient.invalidateQueries();
-  }
+  if ((options.method || 'GET').toUpperCase() !== 'GET') invalidateFor(url);
 
   return data as T;
 }
 
-const qs = (params: Record<string, string>) => {
+/** Thin verbs over request() for the per-module API files in src/lib/apis/. */
+export const http = {
+  get: <T>(url: string) => request<T>(url),
+  post: <T>(url: string, body?: unknown) => request<T>(url, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
+  put: <T>(url: string, body?: unknown) => request<T>(url, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) }),
+  patch: <T>(url: string, body?: unknown) => request<T>(url, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) }),
+  del: <T>(url: string, body?: unknown) => request<T>(url, { method: 'DELETE', body: body === undefined ? undefined : JSON.stringify(body) }),
+};
+
+export const qs = (params: Record<string, string | number | undefined | null>) => {
   const entries = Object.entries(params).filter(([, v]) => v !== '' && v != null);
   if (!entries.length) return '';
-  return '?' + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  return '?' + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
 };
 
 export const api = {
@@ -173,14 +182,16 @@ export const api = {
   getCustomers: (params: Record<string, string> = {}) =>
     request<{ customers: Customer[]; meta?: PageMeta }>(`/customers${qs(params)}`),
   getCustomer: (id: string) => request<any>(`/customers/${id}`),
-  createCustomer: (data: Partial<Customer>) =>
-    request<{ customer: Customer }>('/customers', { method: 'POST', body: JSON.stringify(data) }),
+  createCustomer: (data: Partial<Customer> & { createLogin?: boolean }) =>
+    request<{ customer: Customer; tempPassword?: string; notified?: string[] }>('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (id: string, data: Partial<Customer>) =>
     request<{ customer: Customer }>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCustomer: (id: string, reason?: string) =>
+    request<{ success: boolean; recycleBinId: string; message: string }>(`/customers/${id}/delete`, { method: 'POST', body: JSON.stringify({ reason }) }),
   archiveCustomer: (id: string) =>
     request<{ success: boolean }>(`/customers/${id}`, { method: 'DELETE' }),
   resetCustomerPassword: (customerId: string, tempPassword?: string) =>
-    request<{ success: boolean; tempPassword: string; username: string }>('/auth/reset-customer-password', {
+    request<{ success: boolean; tempPassword: string; username: string; email?: string; notified?: string[] }>('/auth/reset-customer-password', {
       method: 'POST',
       body: JSON.stringify({ customerId, tempPassword }),
     }),
@@ -190,6 +201,8 @@ export const api = {
     request<{ projects: SolarProject[]; meta?: PageMeta }>(`/projects${qs(params)}`),
   getProject: (id: string) => request<any>(`/projects/${id}`),
   getProjectEquipmentAssets: (id: string) => request<{ assets: import('../types').EquipmentAsset[] }>(`/projects/${id}/equipment-assets`),
+  deleteProject: (id: string, reason?: string) =>
+    request<{ success: boolean; recycleBinId?: string; message?: string }>(`/projects/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
   createProject: (data: Partial<SolarProject>) =>
     request<{ project: SolarProject }>('/projects', { method: 'POST', body: JSON.stringify(data) }),
   updateProject: (id: string, data: Partial<SolarProject>) =>
@@ -263,7 +276,7 @@ export const api = {
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new ApiError((data as any).error || 'Failed to upload file', response.status);
-    void queryClient.invalidateQueries();
+    invalidateFor('/documents');
     return data as { fileId: string; fileName: string; fileSize: number; mimeType: string };
   },
 

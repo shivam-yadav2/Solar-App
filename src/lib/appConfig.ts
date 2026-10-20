@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
+import { store } from './storage';
 import { Platform } from 'react-native';
 
 /**
@@ -34,7 +34,7 @@ export const getApiBase = () => apiBase;
 /** Use the address saved from an earlier check (call once at boot, before any request). */
 export async function loadSavedApiBase(): Promise<void> {
   try {
-    const saved = await SecureStore.getItemAsync(API_BASE_KEY);
+    const saved = await store.get(API_BASE_KEY);
     if (saved && /^https:\/\//.test(saved)) apiBase = saved;
   } catch {
     // keep the built-in address
@@ -44,8 +44,8 @@ export async function loadSavedApiBase(): Promise<void> {
 async function switchApiBase(url: string): Promise<void> {
   apiBase = url;
   try {
-    if (url === DEFAULT_API_BASE) await SecureStore.deleteItemAsync(API_BASE_KEY);
-    else await SecureStore.setItemAsync(API_BASE_KEY, url);
+    if (url === DEFAULT_API_BASE) await store.del(API_BASE_KEY);
+    else await store.set(API_BASE_KEY, url);
   } catch {
     // in-memory switch still applies for this run
   }

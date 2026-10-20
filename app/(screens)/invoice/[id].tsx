@@ -1,30 +1,78 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FileText, MapPin, PackageCheck, UserRound } from 'lucide-react-native';
-import { api } from '../../../src/lib/api';
-import { useFetch } from '../../../src/hooks/useFetch';
+import { CircleCheck, CircleX, Ellipsis, IndianRupee, UserRound, Zap } from 'lucide-react-native';
+import { ops } from '../../../src/lib/apis/ops';
+import { useApi } from '../../../src/lib/query';
+import { useAuth } from '../../../src/context/AuthContext';
 import { formatDate, formatINR } from '../../../src/lib/formatters';
-import { Badge, Card, DetailRow, EmptyState, ErrorState, Loading, Screen } from '../../../src/components/ui';
+import { Badge, ErrorState, Hero, IconButton, IconTile, InfoRow, ListSkeleton, Row, Screen, Section, space, T, useOverlay, useTheme } from '../../../src/ds';
+import { DocumentActions } from '../../../src/components/DocumentActions';
 
-function TaxRow({ label, value }: { label: string; value: number }) {
-  return value > 0 ? <View className="flex-row justify-between py-2"><Text className="text-xs text-slate-500">{label}</Text><Text className="text-xs font-semibold text-slate-800">{formatINR(value)}</Text></View> : null;
-}
-
-export default function InvoiceDetailScreen() {
-  const router = useRouter();
+export default function InvoiceDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const state = useFetch(() => api.getInvoices({ limit: '200' }), [id], { queryKey: ['invoice-detail', id] });
-  const invoice: any = state.data?.invoices?.find(item => item.id === id);
+  const router = useRouter();
+  const p = useTheme();
+  const { user, hasPermission: can } = useAuth();
+  const { actions, toast } = useOverlay();
+  const isCustomer = user?.role === 'CUSTOMER';
+  const q = useApi(['invoices', 'detail', id], () => ops.invoice(id!), { enabled: !!id });
+  const x = q.data?.invoice;
+  const lines: any[] = x?.lineItems || [];
+  const tax = lines.length ? lines.reduce((s, l) => s + Number(l.cgstAmount || 0) + Number(l.sgstAmount || 0) + Number(l.igstAmount || 0), 0) : Number(x?.taxAmount || 0);
 
-  return <Screen title="Invoice Details" subtitle={invoice?.invoiceNumber || 'Billing document'} onBack={() => router.back()} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : !invoice ? <EmptyState message="This invoice is no longer available." /> : <>
-      <Card className="bg-[#0b1b31] border-[#173554]"><View className="flex-row items-start"><View className="h-11 w-11 items-center justify-center rounded-2xl bg-amber-400"><FileText size={21} color="#0b1b31" /></View><View className="ml-3 flex-1"><Text className="text-[10px] font-bold uppercase tracking-[1.2px] text-amber-300">{invoice.invoiceType}</Text><Text className="mt-1 text-lg font-extrabold text-white">{formatINR(invoice.amount)}</Text><Text className="mt-1 text-xs text-slate-300">Issued {formatDate(invoice.invoiceDate)}</Text></View><Badge text={invoice.status} tone={invoice.status === 'Paid' ? 'green' : invoice.status === 'Cancelled' ? 'rose' : 'amber'} /></View></Card>
-      <Card><View className="mb-3 flex-row items-center"><UserRound size={17} color="#2563eb" /><Text className="ml-2 text-sm font-extrabold text-slate-900">Customer & project</Text></View><DetailRow label="Customer" value={invoice.customerName} /><DetailRow label="Mobile" value={invoice.customerMobile} /><DetailRow label="Email" value={invoice.customerEmail} /><DetailRow label="Project" value={invoice.projectName} /><DetailRow label="Capacity" value={invoice.capacityKw ? `${invoice.capacityKw} kWp` : undefined} /><View className="mt-2 flex-row"><MapPin size={14} color="#94a3b8" /><Text className="ml-2 flex-1 text-xs leading-5 text-slate-500">{invoice.installationAddress || invoice.customerAddress || 'Address not recorded'}</Text></View></Card>
-      <Card><Text className="mb-3 text-sm font-extrabold text-slate-900">GST calculation</Text><DetailRow label="Taxable value" value={formatINR((invoice.lineItems || []).reduce((sum: number, item: any) => sum + Number(item.taxableValue || 0), 0) || Number(invoice.amount || 0) - Number(invoice.taxAmount || 0))} /><TaxRow label="CGST" value={(invoice.lineItems || []).reduce((sum: number, item: any) => sum + Number(item.cgstAmount || 0), 0)} /><TaxRow label="SGST" value={(invoice.lineItems || []).reduce((sum: number, item: any) => sum + Number(item.sgstAmount || 0), 0)} /><TaxRow label="IGST" value={(invoice.lineItems || []).reduce((sum: number, item: any) => sum + Number(item.igstAmount || 0), 0)} /><DetailRow label="GST total" value={formatINR(invoice.taxAmount || 0)} /><DetailRow label="HSN / SAC" value={invoice.gstSnapshot?.defaultHsnSacCode || invoice.lineItems?.[0]?.hsnSacCode} /><DetailRow label="Tax treatment" value={invoice.gstSnapshot ? (invoice.gstSnapshot.supplyType === 'INTER_STATE' ? 'Inter-state · IGST' : 'Intra-state · CGST + SGST') : 'Legacy invoice'} /></Card>
-      <Card><Text className="mb-3 text-sm font-extrabold text-slate-900">Items billed</Text>{(invoice.lineItems || []).length ? invoice.lineItems.map((item: any) => <View key={item.id} className="border-b border-slate-100 py-3 last:border-b-0"><View className="flex-row justify-between gap-3"><Text className="flex-1 text-xs font-bold text-slate-800">{item.itemDescription}</Text><Text className="text-xs font-bold text-slate-900">{formatINR(item.totalAmount)}</Text></View><Text className="mt-1 text-[11px] text-slate-500">{item.quantity} {item.unitOfMeasure} · HSN {item.hsnSacCode || '—'} · taxable {formatINR(item.taxableValue)}</Text></View>) : <Text className="text-xs text-slate-500">{invoice.description || 'No line item details available.'}</Text>}</Card>
-      <Card><View className="mb-3 flex-row items-center"><PackageCheck size={17} color="#059669" /><Text className="ml-2 text-sm font-extrabold text-slate-900">Installed equipment</Text></View><DetailRow label="Panels" value={[invoice.panelBrand, invoice.panelModel].filter(Boolean).join(' · ')} /><DetailRow label="Panel serials" value={Array.isArray(invoice.panelSerialNumbers) ? invoice.panelSerialNumbers.filter(Boolean).join(', ') : undefined} /><DetailRow label="Inverter" value={[invoice.inverterBrand, invoice.inverterModel].filter(Boolean).join(' · ')} /><DetailRow label="Inverter serial" value={invoice.inverterSerial} /></Card>
-      <Card><DetailRow label="Due date" value={invoice.dueDate ? formatDate(invoice.dueDate) : 'Not set'} /><DetailRow label="Created by" value={invoice.uploadedBy} /><DetailRow label="Notes" value={invoice.description} /></Card>
-    </>}
-  </Screen>;
+  const setStatus = (status: 'Issued' | 'Paid' | 'Cancelled') => {
+    const run = async () => { try { await ops.setInvoiceStatus(x.id, status, status === 'Cancelled' ? 'Cancelled from the app' : undefined); toast(status === 'Paid' ? 'Marked paid' : status === 'Cancelled' ? 'Invoice cancelled' : 'Marked unpaid'); void q.refresh(); } catch (e: any) { toast(e.message, 'error'); } };
+    if (status !== 'Cancelled' || Platform.OS === 'web') return void run();
+    Alert.alert('Cancel this invoice?', 'It stays in the list for your records but no longer counts as billed.', [{ text: 'Keep', style: 'cancel' }, { text: 'Cancel invoice', style: 'destructive', onPress: () => void run() }]);
+  };
+  const menu = () => actions({
+    title: x?.invoiceNumber,
+    items: [
+      x?.status !== 'Paid' && { label: 'Mark as paid', icon: <CircleCheck size={20} color={p.green} />, onPress: () => setStatus('Paid') },
+      x?.status === 'Paid' && { label: 'Mark as unpaid', icon: <CircleCheck size={20} color={p.accentText} />, onPress: () => setStatus('Issued') },
+      can('payments.create') && { label: 'Record payment', icon: <IndianRupee size={20} color={p.accentText} />, onPress: () => router.push({ pathname: '/payment-form', params: { projectId: x.projectId, customerId: x.customerId, amount: String(x.amount) } }) },
+      x?.status !== 'Cancelled' && { label: 'Cancel invoice', destructive: true, icon: <CircleX size={20} color={p.red} />, onPress: () => setStatus('Cancelled') },
+    ].filter(Boolean) as any,
+  });
+
+  return (
+    <Screen title={x?.invoiceNumber || 'Invoice'} large={false} back right={x && can('invoices.create') && !isCustomer ? <IconButton icon={<Ellipsis size={18} color={p.label} />} label="More actions" onPress={menu} /> : undefined} refreshing={q.refreshing} onRefresh={q.refresh}>
+      {q.error ? <ErrorState message={q.error} onRetry={q.refresh} /> : q.loading || !x ? <ListSkeleton rows={4} avatar={false} /> : (
+        <>
+          <Hero label={`${x.invoiceType} · ${formatDate(x.invoiceDate)}`} value={formatINR(x.amount)} caption={x.dueDate ? `Due ${formatDate(x.dueDate)}` : undefined} />
+          <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: -space.m }}><Badge text={x.status === 'Issued' ? 'Unpaid' : x.status} tone={x.status === 'Paid' ? 'green' : x.status === 'Cancelled' ? 'gray' : 'orange'} size="m" /></View>
+
+          <DocumentActions kind="invoice" id={x.id} data={x} fileName={`Invoice ${x.invoiceNumber}`} />
+
+          <Section>
+            {!isCustomer ? <Row icon={<IconTile icon={<UserRound size={17} color={p.blue} />} tone="blue" />} title={x.customerName} subtitle={x.customerMobile} onPress={() => router.push({ pathname: '/customer/[id]', params: { id: x.customerId } })} /> : null}
+            <Row icon={<IconTile icon={<Zap size={17} color={p.orange} />} tone="orange" />} title={x.projectName} subtitle={x.capacityKw ? `${x.capacityKw} kW` : undefined} onPress={() => router.push({ pathname: '/project/[id]', params: { id: x.projectId } })} />
+          </Section>
+
+          <Section header="Items">
+            {(lines.length ? lines : [{ id: 'one', itemDescription: x.description || 'Solar rooftop power plant', taxableValue: Number(x.amount) - Number(x.taxAmount || 0), totalAmount: x.amount, quantity: 1 }]).map((l: any) => (
+              <View key={l.id} style={{ paddingHorizontal: space.l, paddingVertical: 12, gap: 2 }}>
+                <View style={{ flexDirection: 'row', gap: space.m }}>
+                  <T variant="body" style={{ flex: 1 }}>{l.itemDescription}</T>
+                  <T variant="body" num weight="600">{formatINR(l.totalAmount)}</T>
+                </View>
+                <T variant="footnote" color="secondary" num>{[l.quantity ? `${l.quantity} ${l.unitOfMeasure || ''} × ${formatINR(l.ratePerUnit || l.taxableValue)}` : '', l.hsnSacCode ? `HSN ${l.hsnSacCode}` : ''].filter(Boolean).join(' · ')}</T>
+              </View>
+            ))}
+          </Section>
+
+          <Section>
+            <InfoRow label="Taxable value" value={formatINR(Number(x.amount) - tax)} />
+            {x.gstSnapshot?.supplyType === 'INTER_STATE' ? <InfoRow label="IGST" value={formatINR(tax)} /> : null}
+            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="CGST" value={formatINR(tax / 2)} /> : null}
+            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="SGST" value={formatINR(tax / 2)} /> : null}
+            <InfoRow label="Total" value={<T variant="headline" num>{formatINR(x.amount)}</T>} />
+          </Section>
+
+          {x.description && !lines.some((l) => l.itemDescription === x.description) ? <Section header="Notes"><InfoRow label="" value={x.description} multiline /></Section> : null}
+        </>
+      )}
+    </Screen>
+  );
 }

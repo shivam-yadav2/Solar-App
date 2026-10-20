@@ -1,158 +1,136 @@
 import React from 'react';
-import { View, Text, Pressable, Alert } from 'react-native';
-import {
-  Receipt, WalletCards, TrendingUp, FileText, ShieldCheck, Wrench,
-  FolderKanban, FileSpreadsheet, History, UserCog, Shield, Settings,
-  Crown, Tags, Activity, LogOut, ChevronRight,
-  Search,
-  KeyRound,
-  Bell,
-} from 'lucide-react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Activity, Bell, BookOpen, Boxes, Building2, Calculator, ClipboardList, CreditCard, FileClock, FileText, FolderOpen, Gauge, HardHat, IndianRupee, Inbox, KeyRound,
+  LifeBuoy, LogOut, MessageSquareHeart, PieChart, ReceiptText, Search, Settings, ShieldCheck, ShieldOff, Smartphone, Target, Trash2, UserCog, Users, Wallet, Wrench, Zap, FileBarChart,
+} from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
-import { Screen, Card } from '../../src/components/ui';
+import { useCanOpen } from '../../src/lib/access';
+import { api } from '../../src/lib/api';
+import { platformTabAllowed } from '../../src/lib/platformRoles';
+import { Avatar, Badge, IconTile, Row, Screen, Section, T, Tone, useTheme, space, radius, elevation, Tap, toneColors } from '../../src/ds';
+import { WorkspaceNotices } from '../../src/components/gates';
 
-/**
- * The "More" tab is the native equivalent of the web Sidebar's overflow —
- * every destination that doesn't fit in the 5-slot bottom bar.
- *
- * Every entry is a real Expo Router destination backed by the shared API.
- */
-type Item = { label: string; Icon: any; route: string; permission?: string };
-type Section = { title: string; items: Item[] };
+interface Item { label: string; icon: React.ComponentType<{ size?: number; color?: string }>; tone: Tone; path: string; badge?: number; subtitle?: string }
 
-const TENANT_SECTIONS: Section[] = [
-  {
-    title: 'PRE-SALES & OPERATIONS',
-    items: [
-      { label: 'Leads & Follow-ups', Icon: UserCog, route: '/leads', permission: 'leads.view' },
-      { label: 'Quotations', Icon: FileSpreadsheet, route: '/quotations', permission: 'quotations.view' },
-      { label: 'Inventory & BoQ', Icon: FolderKanban, route: '/inventory', permission: 'inventory.view' },
-      { label: 'Field Operations', Icon: Activity, route: '/field-operations', permission: 'attendance.view' },
-      { label: 'DISCOM Liaison', Icon: ShieldCheck, route: '/discom', permission: 'discom.view' },
-    ],
-  },
-  {
-    title: 'FINANCIALS',
-    items: [
-      { label: 'Expenses', Icon: Receipt, route: '/expenses', permission: 'expenses.view' },
-      { label: 'Staff Payroll', Icon: WalletCards, route: '/payroll', permission: 'payroll.view' },
-      { label: 'Profit & Margins', Icon: TrendingUp, route: '/profit', permission: 'projects.view' },
-      { label: 'Invoices', Icon: FileText, route: '/invoices', permission: 'invoices.view' },
-    ],
-  },
-  {
-    title: 'AFTERSALES & ASSETS',
-    items: [
-      { label: 'Warranties', Icon: ShieldCheck, route: '/warranties', permission: 'warranties.view' },
-      { label: 'Service Tickets', Icon: Wrench, route: '/tickets', permission: 'complaints.view' },
-      { label: 'Documents', Icon: FolderKanban, route: '/documents', permission: 'documents.view' },
-    ],
-  },
-  {
-    title: 'SYSTEM',
-    items: [
-      { label: 'Reports & Export', Icon: FileSpreadsheet, route: '/reports', permission: 'reports.view' },
-      { label: 'Audit Logs', Icon: History, route: '/audit-logs', permission: 'activity_logs.view' },
-      { label: 'Team Members', Icon: UserCog, route: '/team', permission: 'users.manage' },
-      { label: 'Roles & Permissions', Icon: Shield, route: '/roles', permission: 'roles.manage' },
-      { label: 'Settings', Icon: Settings, route: '/settings' },
-      { label: 'Notifications', Icon: Bell, route: '/notifications' },
-      { label: 'Subscription Billing', Icon: Receipt, route: '/billing' },
-      { label: 'Account Security', Icon: KeyRound, route: '/account-security' },
-    ],
-  },
-];
-
-const PLATFORM_SECTIONS: Section[] = [
-  {
-    title: 'PLATFORM',
-    items: [
-      { label: 'Tenants', Icon: Crown, route: '/tenants' },
-      { label: 'Plans', Icon: Tags, route: '/plans' },
-      { label: 'Audit Log', Icon: History, route: '/platform-audit' },
-      { label: 'Search', Icon: Search, route: '/platform-search' },
-      { label: 'System Health', Icon: Activity, route: '/system-health' },
-    ],
-  },
-];
-
-const CUSTOMER_SECTIONS: Section[] = [{
-  title: 'MY SOLAR PORTAL',
-  items: [
-    { label: 'Invoices', Icon: FileText, route: '/invoices' },
-    { label: 'Warranties', Icon: ShieldCheck, route: '/warranties' },
-    { label: 'Service Tickets', Icon: Wrench, route: '/tickets' },
-    { label: 'Documents', Icon: FolderKanban, route: '/documents' },
-    { label: 'Share Feedback', Icon: FileSpreadsheet, route: '/feedback' },
-    { label: 'Notifications', Icon: Bell, route: '/notifications' },
-    { label: 'Account Security', Icon: KeyRound, route: '/account-security' },
-  ],
-}];
-
-export default function MoreScreen() {
+export default function MoreTab() {
   const router = useRouter();
-  const { user, tenant, logout, switchTenantScope, hasPermission } = useAuth();
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const sections = user?.role === 'CUSTOMER' ? CUSTOMER_SECTIONS : isSuperAdmin && !tenant ? PLATFORM_SECTIONS : TENANT_SECTIONS;
+  const p = useTheme();
+  const { user, tenant, customer, hasPermission: can, isImpersonating, exitWorkspace } = useAuth();
+  const canOpen = useCanOpen();
+  const isCustomer = user?.role === 'CUSTOMER';
+  const isPlatform = user?.role === 'SUPER_ADMIN' && !tenant;
+  const role = (user as any)?.platformRole;
+  const kpi = useQuery({ queryKey: ['dashboard', 'kpis'], queryFn: api.getDashboardKpis, enabled: !isCustomer && !isPlatform && can('reports.view'), staleTime: 60_000 });
+  const pendingExp = Number(kpi.data?.kpis?.pendingExpenseCount || 0);
+  const go = (path: string) => router.push(path as never);
 
-  const confirmLogout = () =>
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => void logout() },
-    ]);
+  const sections: { title: string; items: (Item | false)[] }[] = isCustomer ? [
+    { title: 'My solar', items: [
+      { label: 'Invoices & receipts', icon: ReceiptText, tone: 'accent', path: '/invoices' },
+      { label: 'Warranty cards', icon: ShieldCheck, tone: 'green', path: '/warranties' },
+      { label: 'Service requests', icon: Wrench, tone: 'red', path: '/tickets' },
+      { label: 'Documents', icon: FolderOpen, tone: 'purple', path: '/documents' },
+    ] },
+    { title: 'More', items: [
+      { label: 'Loan EMI calculator', icon: Calculator, tone: 'blue', path: '/emi' },
+      { label: 'Rate your installation', icon: MessageSquareHeart, tone: 'orange', path: '/feedback' },
+      { label: 'Notifications', icon: Bell, tone: 'gray', path: '/notifications' },
+    ] },
+  ] : isPlatform ? [
+    { title: 'Companies', items: [
+      platformTabAllowed(role, 'saas_control') && { label: 'Companies', icon: Building2, tone: 'accent', path: '/tenants' },
+      platformTabAllowed(role, 'saas_usage') && { label: 'Usage', icon: Activity, tone: 'purple', path: '/platform/usage' },
+      platformTabAllowed(role, 'saas_plans') && { label: 'Plans', icon: Wallet, tone: 'teal', path: '/plans' },
+      platformTabAllowed(role, 'saas_enquiries') && { label: 'Enquiries', icon: Inbox, tone: 'blue', path: '/platform/enquiries' },
+    ] },
+    { title: 'Money & support', items: [
+      platformTabAllowed(role, 'saas_billing') && { label: 'Billing', icon: CreditCard, tone: 'green', path: '/platform/billing' },
+      platformTabAllowed(role, 'saas_support') && { label: 'Support inbox', icon: LifeBuoy, tone: 'red', path: '/platform/support' },
+    ] },
+    { title: 'Platform', items: [
+      platformTabAllowed(role, 'saas_users') && { label: 'Users', icon: UserCog, tone: 'blue', path: '/platform/users' },
+      platformTabAllowed(role, 'saas_audit') && { label: 'Activity & security', icon: FileClock, tone: 'gray', path: '/platform-audit' },
+      platformTabAllowed(role, 'saas_search') && { label: 'Search everything', icon: Search, tone: 'purple', path: '/platform-search' },
+      platformTabAllowed(role, 'saas_health') && { label: 'System health', icon: Gauge, tone: 'orange', path: '/system-health' },
+      { label: 'Other settings on the web', icon: Smartphone, tone: 'gray', path: '/web-only', subtitle: 'Communication, platform settings, data & backups, API, mobile app' },
+    ] },
+  ] : [
+    { title: 'Sales', items: [
+      canOpen('leads') && { label: 'Leads & follow-ups', icon: Target, tone: 'purple', path: '/leads' },
+      canOpen('quotations') && { label: 'Quotations', icon: FileText, tone: 'blue', path: '/quotations' },
+    ] },
+    { title: 'Operations', items: [
+      canOpen('field') && { label: 'Field work', icon: HardHat, tone: 'teal', path: '/field-operations', subtitle: 'Attendance and site reports' },
+      canOpen('discom') && { label: 'DISCOM & subsidy', icon: Zap, tone: 'orange', path: '/discom' },
+      canOpen('inventory') && { label: 'Inventory & BoQ', icon: Boxes, tone: 'accent', path: '/inventory' },
+      canOpen('documents') && { label: 'Documents', icon: FolderOpen, tone: 'purple', path: '/documents' },
+    ] },
+    { title: 'After-sales', items: [
+      canOpen('complaints') && { label: 'Service tickets', icon: Wrench, tone: 'red', path: '/tickets' },
+      canOpen('warranties') && { label: 'Warranties', icon: ShieldCheck, tone: 'green', path: '/warranties' },
+    ] },
+    { title: 'Money', items: [
+      canOpen('expenses') && { label: 'Expenses', icon: ClipboardList, tone: 'orange', path: '/expenses', badge: can('financials.approve') ? pendingExp : 0 },
+      canOpen('payroll') && { label: 'Payroll', icon: IndianRupee, tone: 'green', path: '/payroll' },
+      canOpen('profit') && { label: 'Profit & margins', icon: PieChart, tone: 'purple', path: '/profit' },
+      canOpen('reports') && { label: 'Reports & export', icon: FileBarChart, tone: 'blue', path: '/reports' },
+    ] },
+    { title: 'Company', items: [
+      canOpen('team') && { label: 'Team', icon: Users, tone: 'blue', path: '/team' },
+      canOpen('roles') && { label: 'Roles & permissions', icon: KeyRound, tone: 'purple', path: '/roles' },
+      canOpen('activity') && { label: 'Audit log', icon: FileClock, tone: 'gray', path: '/audit-logs' },
+      { label: 'Company settings', icon: Settings, tone: 'gray', path: '/settings' },
+      can('customers.delete') && { label: 'Recycle bin', icon: Trash2, tone: 'red', path: '/recycle-bin' },
+      can('customers.delete') && { label: 'Privacy requests', icon: ShieldOff, tone: 'teal', path: '/privacy' },
+      user?.role === 'ADMIN' && { label: 'SolarOS plan & billing', icon: CreditCard, tone: 'green', path: '/billing' },
+    ] },
+    { title: 'Help', items: [
+      { label: 'SolarOS support', icon: LifeBuoy, tone: 'red', path: '/support' },
+      { label: 'Help guide', icon: BookOpen, tone: 'blue', path: '/help' },
+      { label: 'Loan EMI calculator', icon: Calculator, tone: 'teal', path: '/emi' },
+    ] },
+  ];
 
   return (
-    <Screen title="More" subtitle={tenant?.name ?? 'Platform'}>
-      <Card>
-        <Text className="text-sm font-bold text-slate-900">{user?.username}</Text>
-        <Text className="text-xs text-slate-500 mt-0.5">{user?.email}</Text>
-        <View className="mt-2 self-start bg-amber-50 px-2 py-0.5 rounded-md">
-          <Text className="text-[10px] font-semibold text-amber-700">
-            {isSuperAdmin ? 'Super Admin' : user?.role}
-          </Text>
+    <Screen title="More">
+      <Tap onPress={() => go('/account')} scaleTo={0.985} style={[{ backgroundColor: p.surface, borderRadius: radius.l, padding: space.l, flexDirection: 'row', alignItems: 'center', gap: space.l }, elevation(p, 1)]}>
+        <Avatar name={customer?.name || user?.username || ''} size={56} />
+        <View style={{ flex: 1 }}>
+          <T variant="title3" numberOfLines={1}>{customer?.name || user?.username}</T>
+          <T variant="footnote" color="secondary" numberOfLines={1}>{tenant?.name || 'SolarOS platform'} · Account, password, devices</T>
         </View>
-      </Card>
+      </Tap>
 
-      {isSuperAdmin && tenant ? (
-        <Pressable
-          onPress={async () => { await switchTenantScope(null); router.replace('/(tabs)/dashboard'); }}
-          className="mb-3 bg-amber-50 border border-amber-200 rounded-2xl py-3 items-center"
-        >
-          <Text className="text-sm font-semibold text-amber-800">Return to Global Platform</Text>
-        </Pressable>
+      {isImpersonating ? (
+        <Tap onPress={() => void exitWorkspace()} style={{ backgroundColor: toneColors(p, 'orange').bg, borderRadius: radius.l, padding: space.l, flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+          <LogOut size={20} color={p.orange} />
+          <View style={{ flex: 1 }}>
+            <T variant="headline" style={{ color: p.orange }}>Exit {tenant?.name}</T>
+            <T variant="footnote" color="secondary">You're inside this company's workspace as a platform admin.</T>
+          </View>
+        </Tap>
       ) : null}
 
-      {sections.map((section) => (
-        <View key={section.title} className="mb-2">
-          <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 mb-1.5 mt-2">
-            {section.title}
-          </Text>
-          <View className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            {section.items.filter(item => user?.role !== 'ADMIN' || !item.permission || hasPermission(item.permission)).map((item, i) => (
-              <Pressable
-                key={item.label}
-                onPress={() => router.push(item.route as any)}
-                className={`flex-row items-center gap-3 px-4 py-3.5 active:bg-slate-50 ${
-                  i > 0 ? 'border-t border-slate-100' : ''
-                }`}
-              >
-                <item.Icon size={18} color="#64748b" />
-                <Text className="flex-1 text-sm text-slate-800">{item.label}</Text>
-                <ChevronRight size={16} color="#cbd5e1" />
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ))}
+      <WorkspaceNotices />
 
-      <Pressable
-        onPress={confirmLogout}
-        className="mt-4 flex-row items-center justify-center gap-2 bg-white border border-rose-200 rounded-2xl py-3.5 active:bg-rose-50"
-      >
-        <LogOut size={16} color="#e11d48" />
-        <Text className="text-sm font-semibold text-rose-600">Sign Out</Text>
-      </Pressable>
+      {sections.map((sec) => {
+        const items = sec.items.filter(Boolean) as Item[];
+        if (!items.length) return null;
+        return (
+          <Section key={sec.title} header={sec.title}>
+            {items.map((it) => {
+              const Icon = it.icon;
+              const c = toneColors(p, it.tone);
+              return <Row key={it.label} icon={<IconTile icon={<Icon size={17} color={c.fg} />} tone={it.tone} />} title={it.label} subtitle={it.subtitle} accessory={it.badge ? <Badge text={String(it.badge)} tone="red" status={false} /> : undefined} onPress={() => go(it.path)} />;
+            })}
+          </Section>
+        );
+      })}
+      <T variant="footnote" color="secondary" align="center">SolarOS · {tenant?.slug || 'platform'}</T>
     </Screen>
   );
 }
+

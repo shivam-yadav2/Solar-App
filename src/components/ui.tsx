@@ -2,9 +2,12 @@ import React from 'react';
 import { View, Text, ActivityIndicator, Pressable, RefreshControl, Switch, TextInput } from 'react-native';
 import { ArrowLeft, Search } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { Screen as DSScreen } from '../ds/screen';
 
-/** Page chrome shared by every screen: title, subtitle, pull-to-refresh. */
+/**
+ * Older screens' page chrome — now drawn by the design-system Screen (nav bar
+ * with back button, safe areas, pull-to-refresh) until each screen is rebuilt.
+ */
 export const Screen: React.FC<{
   title: string;
   subtitle?: string;
@@ -14,34 +17,9 @@ export const Screen: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, subtitle, refreshing, onRefresh, onBack, action, children }) => (
-  <SafeAreaView className="flex-1 bg-[#f6f8fb]" edges={[]}>
-    <KeyboardAwareScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 20, paddingBottom: 40 }}
-      bottomOffset={28}
-      keyboardDismissMode="on-drag"
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor="#f59e0b" />
-        ) : undefined
-      }
-      keyboardShouldPersistTaps="handled"
-    >
-      <View className="mb-5 flex-row items-center gap-3">
-        {onBack ? (
-          <Pressable onPress={onBack} hitSlop={8} className="w-11 h-11 rounded-2xl bg-white border border-slate-200 items-center justify-center shadow-sm">
-            <ArrowLeft size={18} color="#334155" />
-          </Pressable>
-        ) : null}
-        <View className="flex-1">
-          <Text className="text-[23px] font-bold tracking-tight text-slate-950">{title}</Text>
-          {subtitle ? <Text className="text-[13px] text-slate-500 mt-1">{subtitle}</Text> : null}
-        </View>
-        {action}
-      </View>
-      {children}
-    </KeyboardAwareScrollView>
-  </SafeAreaView>
+  <DSScreen title={title} subtitle={subtitle} back={onBack ? onBack : false} right={action} large={!onBack} refreshing={refreshing} onRefresh={onRefresh} contentStyle={{ gap: 0 }}>
+    {children}
+  </DSScreen>
 );
 
 export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({

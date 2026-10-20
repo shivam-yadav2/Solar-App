@@ -1,3 +1,4 @@
+// Copied from SAAS-Solar/src/types.ts — keep in sync (the web file is the source of truth).
 export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'CUSTOMER';
 
 export type TenantStatus = 'active' | 'trial' | 'suspended' | 'expired';
@@ -12,6 +13,28 @@ export interface TenantBranding {
   supportEmail: string;
   supportPhone: string;
   customDomain?: string;
+  /** Websites allowed to use the customer login API (Website Login module), e.g. https://example.com */
+  websiteLoginOrigins?: string[];
+  /** Legacy single key pair (before named credentials); read as one credential. */
+  websiteLoginKeys?: { publishableKey: string; secretKeyHash?: string; secretKeyHint: string; createdAt: string };
+  /** Website Login API credentials — one per integration (company developer, agency…), managed by the platform admin. */
+  websiteLoginCredentials?: WebsiteLoginCredential[];
+}
+
+/** One API key pair for a tenant's Website Login API. The secret is stored only as a SHA-256 hash. */
+export interface WebsiteLoginCredential {
+  id: string;
+  /** Who it was issued to, e.g. "Pixel Agency — WordPress site". */
+  label: string;
+  contactEmail?: string;
+  publishableKey: string;
+  secretKeyHash?: string;
+  secretKeyHint: string;
+  /** Websites allowed to use the publishable key. */
+  allowedOrigins: string[];
+  createdAt: string;
+  createdBy: string;
+  revokedAt?: string;
 }
 
 export interface TenantBusinessProfile {
@@ -43,6 +66,16 @@ export interface TenantModules {
   reportsExport: boolean;
   activityLogs: boolean;
   aiAssistant: boolean;
+  /** Quotation builder. Off unless a super admin explicitly enables it. */
+  quotations?: boolean;
+  /** Pre-sales leads & follow-ups. On unless switched off. */
+  leadsCrm?: boolean;
+  /** Stock, project BoQ and equipment serials. On unless switched off. */
+  inventory?: boolean;
+  /** Attendance and daily progress reports. On unless switched off. */
+  fieldOperations?: boolean;
+  /** Customer login from the tenant's own website (hosted page + login API). Off unless enabled. */
+  websiteLogin?: boolean;
 }
 
 export interface TenantSubscription {
@@ -54,6 +87,203 @@ export interface TenantSubscription {
   maxUsersLimit: number;
   pricePerMonth: number;
   autoRenew: boolean;
+  /** Present on demo workspaces created from Super Admin → Demos. */
+  demo?: TenantDemo;
+
+  // --- Managed by the platform admin (never editable by the tenant) ---
+  /** Add-ons on top of the plan's limits, e.g. 5 extra users for this company. */
+  extraUsers?: number;
+  extraProjects?: number;
+  /** File storage this company may use, in MB (unset = the platform default). */
+  storageLimitMb?: number;
+  /** When on, after currentPeriodEnd the workspace goes grace → read-only → locked. */
+  enforceExpiry?: boolean;
+  /** Days of normal use after the due date (default 7). */
+  graceDays?: number;
+  /** Days of read-only access after the grace period, before locking (default 15). */
+  readOnlyDays?: number;
+  /** Read-only switched on manually (e.g. payment pending). */
+  readOnly?: { since: string; reason?: string; by: string };
+  archivedAt?: string;
+  archivedBy?: string;
+  /** Renewals, extensions and due-date changes, newest first. */
+  renewals?: SubscriptionRenewal[];
+  /** Old company codes, so old login links keep working after a change. */
+  previousSlugs?: string[];
+  /** Platform-only notes about this customer. */
+  crm?: TenantCrm;
+  /** Discount on the SolarOS fee for this company. */
+  discount?: TenantDiscount;
+}
+
+export interface SubscriptionRenewal {
+  id: string;
+  at: string;
+  by: string;
+  kind: 'renewal' | 'extension' | 'due_date';
+  from: string;
+  to: string;
+  amount?: number;
+  method?: string;
+  note?: string;
+}
+
+/** Discount on a company's SolarOS fee (custom price, founder price, coupon). */
+export interface TenantDiscount {
+  type: 'percent' | 'flat';
+  /** Percent off, or flat ₹ off per month. */
+  value: number;
+  label?: string;
+  couponCode?: string;
+  /** Discount stops applying after this date (ISO); none = forever. */
+  until?: string;
+}
+
+// ---------------------------------------------------------------- platform billing (SolarOS → its customers)
+
+export type BillingInvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'void';
+
+export interface BillingLine {
+  description: string;
+  sac?: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+export interface BillingParty {
+  name: string;
+  gstin?: string;
+  address?: string;
+  state?: string;
+  stateCode?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface BillingInvoice {
+  id: string;
+  tenantId: string;
+  tenantName?: string;
+  invoiceNumber: string;
+  kind: 'subscription' | 'custom';
+  status: BillingInvoiceStatus;
+  issueDate: string;
+  dueDate: string;
+  periodStart?: string;
+  periodEnd?: string;
+  months?: number;
+  currency: string;
+  subtotal: number;
+  discount: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+  amountPaid: number;
+  seller: BillingParty;
+  buyer: BillingParty;
+  lines: BillingLine[];
+  notes?: string;
+  planName?: string;
+  discountLabel?: string;
+  publicToken: string;
+  paymentLinkUrl?: string;
+  paymentLinkId?: string;
+  reminders?: { at: string; stage: string; channel: string }[];
+  createdBy: string;
+  createdAt: string;
+  paidAt?: string;
+  voidedAt?: string;
+}
+
+export interface BillingPayment {
+  id: string;
+  tenantId: string;
+  invoiceId: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  paidAt: string;
+  source: 'manual' | 'razorpay';
+  gatewayPaymentId?: string;
+  note?: string;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface BillingCoupon {
+  code: string;
+  type: 'percent' | 'flat';
+  value: number;
+  label?: string;
+  /** Months the discount lasts once applied; 0 = forever. */
+  durationMonths: number;
+  validUntil?: string;
+  maxUses?: number;
+  uses: number;
+  active: boolean;
+}
+
+/** SolarOS's own billing identity and rules (platform settings). */
+export interface BillingSettings {
+  legalName: string;
+  gstin?: string;
+  pan?: string;
+  address?: string;
+  state?: string;
+  stateCode?: string;
+  email?: string;
+  phone?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  upiId?: string;
+  sacCode: string;
+  gstRate: number;
+  /** e.g. "SOS/{FY}/" — {FY} becomes 2026-27. */
+  invoicePrefix: string;
+  paymentTermsDays: number;
+  terms?: string;
+  /** Create the renewal invoice this many days before the due date (0 = off). */
+  autoInvoiceDaysBefore: number;
+  /** Reminder days relative to the due date, e.g. [-7, -3, 0, 3, 7]. */
+  reminderDays: number[];
+  razorpayKeyId?: string;
+  /** Never sent to the browser — only whether it's set. */
+  razorpayKeySecret?: string;
+  razorpayWebhookSecret?: string;
+  coupons: BillingCoupon[];
+}
+
+export interface TenantCrm {
+  salesOwner?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  tags?: string[];
+  notes?: { id: string; at: string; by: string; text: string }[];
+}
+
+/** A sales demo workspace for a prospect (stored on the tenant's subscription). */
+export interface TenantDemo {
+  prospectName: string;
+  company: string;
+  phone: string;
+  email?: string;
+  city?: string;
+  notes?: string;
+  /** Who the prospect should contact to buy — shown in the demo banner and when it ends. */
+  contactName?: string;
+  contactPhone?: string;
+  loginEmail: string;
+  sampleData: boolean;
+  createdAt: string;
+  createdBy: string;
+  expiresAt: string;
+  extendedCount?: number;
+  convertedAt?: string;
 }
 
 export interface Plan {
@@ -104,6 +334,8 @@ export interface User {
   email: string;
   role: UserRole;
   roleId?: string;
+  /** Display name of the user's role (from /auth/me), e.g. "Sales executive". */
+  roleName?: string;
   customerId?: string;
   temporaryPassword?: boolean;
   forcePasswordChange?: boolean;
@@ -111,6 +343,48 @@ export interface User {
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;
+  /** Set at sign-in when the password policy's expiry made a new password necessary. */
+  passwordExpired?: boolean;
+  /** Platform logins only (from /auth/me): Owner, Admin, Support or Billing. */
+  platformRole?: import('./lib/platformRoles').PlatformRole;
+}
+
+/** Platform-wide sign-in rules (Super Admin → Security). */
+export interface SecurityPolicy {
+  requireMfaForPlatform: boolean;
+  requireMfaForStaff: boolean;
+  passwordMinLength: number;
+  passwordRequireNumber: boolean;
+  passwordRequireSymbol: boolean;
+  passwordRequireMixedCase: boolean;
+  /** New password can't be the current one or one of the last N (0 = off). */
+  passwordHistory: number;
+  /** Staff and platform passwords must be changed after N days (0 = never). Customers are exempt. */
+  passwordExpiryDays: number;
+  /** Sign staff/platform out after N minutes without activity (0 = off). */
+  idleTimeoutMinutes: number;
+  /** Most devices one staff/platform login may be signed in on (0 = no limit); the oldest is signed out. */
+  maxDevices: number;
+  /** Platform logins only from these IPs / CIDR ranges (empty = anywhere). */
+  platformIpAllowlist: string[];
+  /** Security alerts: who gets them (empty emails = the platform Owners). */
+  alertEmails?: string[];
+  alertPhones?: string[];
+  /** Alert on a burst of wrong passwords (this many in 15 min for one account; 3× for one IP). */
+  alertFailedLogins?: boolean;
+  failedLoginThreshold?: number;
+  /** Alert when a platform login comes from a network not seen in 90 days. */
+  alertNewPlatformIp?: boolean;
+  /** Show the city / country of an IP (sends the IP to ipwho.is). */
+  lookupIpCountry?: boolean;
+}
+
+/** One company's sign-in rules, set by the platform. */
+export interface TenantSecurity {
+  /** Staff may sign in only from these IPs / CIDR ranges (empty = anywhere). Customers are not affected. */
+  ipAllowlist: string[];
+  /** Staff must use two-factor sign-in. */
+  requireMfa: boolean;
 }
 
 export interface Permission {
@@ -128,6 +402,10 @@ export interface Role {
   isSystem: boolean;
   permissionKeys: string[];
   userCount?: number;
+  /** The viewer may assign this role to staff (server-computed). */
+  canAssign?: boolean;
+  /** The viewer may edit this role's permissions (server-computed). */
+  canEdit?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -233,7 +511,7 @@ export interface SolarProject {
   updatedAt: string;
 }
 
-export type PaymentMethod = 'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Card' | 'Other';
+export type PaymentMethod = string;
 export type PaymentTransactionStatus = 'Successful' | 'Pending' | 'Failed' | 'Refunded';
 export type PaymentReconciliationStatus = 'Unreconciled' | 'Matched' | 'Exception';
 export type ExpenseApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
@@ -294,7 +572,7 @@ export type WarrantyItemType =
   | 'Wiring/Electrical'
   | 'Other Equipment';
 
-export type WarrantyType = 'Standard' | 'Performance' | 'Manufacturer' | 'Extended' | 'Workmanship';
+export type WarrantyType = string;
 
 export interface WarrantyDocument {
   id: string;
@@ -323,30 +601,6 @@ export interface WarrantyDocument {
 export type InvoiceType = 'Tax Invoice' | 'Proforma' | 'Advance Receipt' | 'Final Bill';
 export type InvoiceStatus = 'Issued' | 'Paid' | 'Cancelled';
 
-export type GstRegistrationType = 'Regular' | 'Composition' | 'Unregistered';
-
-export interface GstSettings {
-  enabled: boolean;
-  registrationType: GstRegistrationType;
-  stateCode: string;
-  defaultHsnSacCode: string;
-  defaultTaxRate: number;
-  priceIncludesTax: boolean;
-  invoicePrefix: string;
-}
-
-/** Immutable GST identity and calculation configuration stored with each invoice. */
-export interface GstInvoiceSnapshot extends GstSettings {
-  sellerName: string;
-  sellerAddress: string;
-  sellerState: string;
-  sellerPincode: string;
-  sellerGstin: string;
-  placeOfSupply: string;
-  placeOfSupplyCode: string;
-  supplyType: 'INTRA_STATE' | 'INTER_STATE';
-}
-
 export interface Invoice {
   id: string;
   tenantId?: string;
@@ -365,6 +619,7 @@ export interface Invoice {
   fileName?: string;
   fileSize?: number;
   description?: string;
+  // Enriched project/equipment details returned for invoice previews and portals.
   projectName?: string;
   capacityKw?: number;
   panelBrand?: string;
@@ -378,18 +633,7 @@ export interface Invoice {
   updatedAt: string;
 }
 
-export type ComplaintType =
-  | 'Solar Panel'
-  | 'Inverter'
-  | 'Battery'
-  | 'Wiring'
-  | 'Earthing'
-  | 'Structure'
-  | 'Generation Issue'
-  | 'UPPCL/Net Metering'
-  | 'Installation'
-  | 'General Complaint'
-  | 'Other';
+export type ComplaintType = string;
 
 export type ComplaintPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -497,18 +741,51 @@ export interface UploadedFile {
   createdAt: string;
 }
 
+export type ActivitySeverity = 'info' | 'notice' | 'warning' | 'critical';
+
+/** Field-level change set: { fieldName: { from, to } }. */
+export type ActivityChanges = Record<string, { from: unknown; to: unknown }>;
+
 export interface ActivityLog {
   id: string;
   tenantId?: string;
+  tenantName?: string;
   userId: string;
   userName: string;
-  userRole: UserRole;
+  /** UserRole, or 'ANONYMOUS' for security events with no matched account. */
+  userRole: UserRole | 'ANONYMOUS';
   action: string;
+  category?: string;
+  severity?: ActivitySeverity;
   entity: string;
   entityId: string;
   entityCustomId?: string;
   details?: Record<string, any>;
+  changes?: ActivityChanges;
+  ipAddress?: string;
+  userAgent?: string;
+  requestId?: string;
+  sessionId?: string;
   timestamp: string;
+}
+
+export interface UserSession {
+  id: string;
+  userId: string;
+  tenantId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+  lastSeenAt: string;
+  lastPath?: string;
+  expiresAt: string;
+  revokedAt?: string;
+  revokedReason?: string;
+  isActive: boolean;
+  userName?: string;
+  userEmail?: string;
+  userRole?: string;
+  tenantName?: string;
 }
 
 export interface Notification {
@@ -523,6 +800,30 @@ export interface Notification {
   linkUrl?: string;
   isRead: boolean;
   createdAt: string;
+}
+
+export type GstRegistrationType = 'Regular' | 'Composition' | 'Unregistered';
+
+export interface GstSettings {
+  enabled: boolean;
+  registrationType: GstRegistrationType;
+  stateCode: string;
+  defaultHsnSacCode: string;
+  defaultTaxRate: number;
+  priceIncludesTax: boolean;
+  invoicePrefix: string;
+}
+
+/** Immutable GST identity and calculation configuration stored with each invoice. */
+export interface GstInvoiceSnapshot extends GstSettings {
+  sellerName: string;
+  sellerAddress: string;
+  sellerState: string;
+  sellerPincode: string;
+  sellerGstin: string;
+  placeOfSupply: string;
+  placeOfSupplyCode: string;
+  supplyType: 'INTRA_STATE' | 'INTER_STATE';
 }
 
 export interface CompanySettings {
@@ -731,14 +1032,52 @@ export interface QuotationItem {
   totalPrice: number;
 }
 
+export type QuotationTemplateKey = 'classic' | 'modern' | 'minimal' | 'bold';
+
+/** One row of the "other details" table: e.g. Inverter | Polycab/Microtek | 3 kw. */
+export interface QuotationComponentLine {
+  category: string;
+  brand: string;
+  spec: string;
+  highlight?: boolean;
+}
+
+/** A tenant-customisable dropdown for one component category. */
+export interface QuotationComponentOption {
+  category: string;
+  options: string[];
+  defaultSpec: string;
+  highlight?: boolean;
+}
+
+export interface QuotationSettings {
+  defaultTemplate: QuotationTemplateKey;
+  validityDays: number;
+  features: string[];
+  components: QuotationComponentOption[];
+  paymentTerms: string;
+  priceLabel: string;
+  termsConditions: string;
+  preparedByName: string;
+  preparedByPhone: string;
+  headerNote: string;
+  branchAddress: string;
+  signatoryTitle: string;
+}
+
 export interface Quotation {
   id: string;
   tenantId: string;
   customId: string;
   leadId?: string;
   customerId?: string;
+  projectId?: string;
+  recipientName?: string;
+  recipientAddress?: string;
+  recipientPhone?: string;
   quotationNumber: string;
   title: string;
+  quotationDate?: string;
   validUntil: string;
   systemCapacityKw: number;
   panelTypeBrand: string;
@@ -751,7 +1090,15 @@ export interface Quotation {
   estimatedMonthlySavings?: number;
   paybackYears?: number;
   status: QuotationStatus;
+  templateKey: QuotationTemplateKey;
+  features: string[];
+  components: QuotationComponentLine[];
+  priceLabel?: string;
   termsConditions?: string;
+  paymentTerms?: string;
+  notes?: string;
+  preparedByName?: string;
+  preparedByPhone?: string;
   createdBy: string;
   items?: QuotationItem[];
   createdAt: string;
@@ -1009,3 +1356,166 @@ export interface TenantUsageMeter {
 }
 
 
+
+// ---------------------------------------------------------------- communication (Super Admin → Communication)
+
+export type MessageChannel = 'email' | 'sms' | 'whatsapp';
+export type MessageEvent =
+  | 'password_reset' | 'temp_password' | 'welcome_staff' | 'welcome_customer' | 'welcome_platform' | 'demo_credentials'
+  | 'billing_invoice' | 'billing_reminder' | 'billing_receipt' | 'support_reply' | 'announcement' | 'customer_document' | 'backup_copy' | 'security_alert';
+
+/** Text for one event on every channel. Variables look like {{name}}. */
+export interface MessageTemplate {
+  enabled: boolean;
+  channels: MessageChannel[];
+  emailSubject: string;
+  emailBody: string;
+  sms: string;
+  whatsapp: string;
+  /** WhatsApp Cloud API: approved template name (business-initiated messages need one). */
+  whatsappTemplateName?: string;
+  whatsappTemplateLanguage?: string;
+  /** Variables sent as the template's {{1}}, {{2}}… in this order, e.g. "name, link". */
+  whatsappParams?: string;
+}
+
+export interface CommunicationSettings {
+  email: {
+    provider: 'off' | 'smtp' | 'brevo' | 'resend';
+    fromName: string; fromEmail: string; replyTo?: string;
+    smtpHost?: string; smtpPort?: number; smtpSecurity?: 'ssl' | 'starttls' | 'none'; smtpUser?: string; smtpPass?: string;
+    apiKey?: string;
+  };
+  sms: {
+    provider: 'off' | 'twilio' | 'http';
+    twilioSid?: string; twilioToken?: string; twilioFrom?: string;
+    httpMethod?: 'GET' | 'POST'; httpUrl?: string; httpHeaders?: string; httpBody?: string;
+  };
+  whatsapp: {
+    provider: 'off' | 'meta' | 'http';
+    metaPhoneNumberId?: string; metaToken?: string;
+    httpMethod?: 'GET' | 'POST'; httpUrl?: string; httpHeaders?: string; httpBody?: string;
+  };
+  templates: Partial<Record<MessageEvent, Partial<MessageTemplate>>>;
+}
+
+export interface MessageLogEntry {
+  id: string; tenantId?: string; tenantName?: string; channel: MessageChannel; event: string; recipient: string; subject?: string;
+  status: 'sent' | 'failed'; error?: string; providerId?: string; createdAt: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  tone: 'info' | 'warning' | 'success';
+  /** Empty = every company. */
+  tenantIds: string[];
+  audience: 'staff' | 'customers' | 'everyone';
+  startsAt: string;
+  endsAt?: string;
+  linkUrl?: string;
+  linkLabel?: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  emailedAt?: string;
+}
+
+export type SupportTicketStatus = 'open' | 'waiting_on_customer' | 'resolved' | 'closed';
+export interface SupportTicket {
+  id: string;
+  number: string;
+  tenantId: string;
+  tenantName?: string;
+  createdById: string;
+  createdByName: string;
+  createdByEmail?: string;
+  subject: string;
+  category: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  status: SupportTicketStatus;
+  assignedToId?: string;
+  assignedToName?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastReplyAt: string;
+  lastReplyBy: 'company' | 'solaros';
+  messageCount?: number;
+}
+export interface SupportMessage {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  authorName: string;
+  side: 'company' | 'solaros';
+  body: string;
+  /** SolarOS team notes the company never sees. */
+  internal: boolean;
+  createdAt: string;
+  attachments?: { fileId: string; name: string; mime: string; size: number }[];
+}
+
+// ---------------------------------------------------------------- platform settings (Super Admin → Platform settings)
+
+export interface PlatformConfig {
+  /** Public address of the app, e.g. https://solaros.voidlayer.in (links in emails, website login). */
+  appUrl: string;
+  /** Extra sites allowed to call the API from a browser (CORS), e.g. the mobile web app. The app's own address is always allowed. */
+  allowedOrigins: string[];
+  maintenance: { enabled: boolean; message: string; until?: string; startedAt?: string; startedBy?: string };
+}
+
+export interface PlatformBranding {
+  name: string;
+  tagline: string;
+  /** Wordmark / logo shown on the website and sign-in (URL or uploaded image). */
+  logoUrl: string;
+  supportEmail: string;
+  supportPhone: string;
+  whatsapp: string;
+  website: string;
+  /** Small print, e.g. "ERP by voidlayer". */
+  companyLine: string;
+  heroBadge: string;
+  heroTitle: string;
+  heroHighlight: string;
+  heroSubtitle: string;
+  heroPoints: string[];
+  pricingSubtitle: string;
+  ctaTitle: string;
+  ctaSubtitle: string;
+  footerAbout: string;
+  faqs: { q: string; a: string }[];
+}
+
+export interface DefaultRole { name: string; description: string; permissionKeys: string[] }
+export interface TenantDefaults {
+  lists: Pick<CompanySettings, 'expenseCategories' | 'complaintCategories' | 'documentCategories' | 'paymentMethods' | 'panelBrands' | 'inverterBrands' | 'batteryBrands'>;
+  gst: Pick<GstSettings, 'defaultTaxRate' | 'defaultHsnSacCode' | 'invoicePrefix' | 'priceIncludesTax'>;
+  warrantyExpiryAlertDays: number;
+  /** Created in every new company next to the built-in Admin role. */
+  roles: DefaultRole[];
+}
+
+export type LegalKey = 'terms' | 'privacy' | 'refund';
+export interface LegalDocument {
+  key: LegalKey;
+  title: string;
+  content: string;
+  version: number;
+  published: boolean;
+  /** Company owners must accept it (again after a new version). */
+  requireAcceptance: boolean;
+  updatedAt?: string;
+}
+
+export interface FeatureFlag {
+  key: string;
+  name: string;
+  description?: string;
+  /** off = nobody, beta = only the chosen companies, on = everyone. */
+  status: 'off' | 'beta' | 'on';
+  tenantIds: string[];
+  updatedAt?: string;
+}

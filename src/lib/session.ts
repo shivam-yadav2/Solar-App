@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { store } from './storage';
 
 /**
  * Token / tenant-scope storage.
@@ -42,22 +42,22 @@ export function getActiveTenantId(): string | null {
 
 export async function setToken(token: string | null): Promise<void> {
   cachedToken = token;
-  if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
-  else await SecureStore.deleteItemAsync(TOKEN_KEY);
+  if (token) await store.set(TOKEN_KEY, token);
+  else await store.del(TOKEN_KEY);
 }
 
 export async function setActiveTenantId(tenantId: string | null): Promise<void> {
   cachedTenantId = tenantId;
-  if (tenantId) await SecureStore.setItemAsync(TENANT_KEY, tenantId);
-  else await SecureStore.deleteItemAsync(TENANT_KEY);
+  if (tenantId) await store.set(TENANT_KEY, tenantId);
+  else await store.del(TENANT_KEY);
 }
 
 /** Hydrate the in-memory cache from secure storage. Call once on app boot. */
 export async function restoreSession(): Promise<{ token: string | null }> {
   try {
     [cachedToken, cachedTenantId] = await Promise.all([
-      SecureStore.getItemAsync(TOKEN_KEY),
-      SecureStore.getItemAsync(TENANT_KEY),
+      store.get(TOKEN_KEY),
+      store.get(TENANT_KEY),
     ]);
   } catch {
     cachedToken = null;

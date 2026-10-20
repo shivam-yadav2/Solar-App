@@ -6,7 +6,7 @@
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/branding/brand-app-icon-v3.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -59,7 +59,22 @@
           "color": "#f59e0b",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SolarOS uses your photos to attach site pictures, receipts and documents.",
+          "cameraPermission": "SolarOS uses the camera to take site photos, receipts and documents."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SolarOS records where you punch in and where site reports are made."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "apiBaseUrl": "https://solaros.voidlayer.in/api"

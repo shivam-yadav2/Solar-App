@@ -71,3 +71,21 @@ export function formatFileSize(bytes: number | undefined | null): string {
 // NOTE: the web app's `exportToCSV` is intentionally omitted here — it builds
 // a Blob and clicks a hidden <a>, which has no meaning on native. Implement
 // with expo-file-system + expo-sharing when CSV export is needed on mobile.
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago", then the date. */
+export function timeAgo(iso: string | undefined | null): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 45) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 7 * 86400) return `${Math.round(s / 86400)} d ago`;
+  return formatDate(iso);
+}
+
+export function greeting(d = new Date()): string {
+  const h = d.getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
