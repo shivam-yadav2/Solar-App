@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useId, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 type UseFetchOptions = {
@@ -12,7 +12,9 @@ type UseFetchOptions = {
  * here once instead of being repeated per screen.
  */
 export function useFetch<T>(fn: () => Promise<T>, deps: unknown[] = [], options: UseFetchOptions = {}) {
-  const fallbackKey = fn.toString().replace(/\s+/g, ' ');
+  // fn.toString() is "[bytecode]" under Hermes, so it can't tell screens apart;
+  // a per-component id can (screens being rebuilt use explicit keys instead).
+  const fallbackKey = useId();
   const queryKey = useMemo(
     () => options.queryKey ?? ['screen-fetch', fallbackKey, ...deps],
     // The dependency list is the public contract of this compatibility hook.
