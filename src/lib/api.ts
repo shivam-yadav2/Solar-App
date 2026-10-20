@@ -1,4 +1,5 @@
-import Constants from 'expo-constants';
+import { APP_PLATFORM, APP_VERSION, getApiBase, markUpdateRequired } from './appConfig';
+import { getPushToken } from './push';
 import type {
   AuthSession,
   User,
@@ -45,17 +46,10 @@ import { queryClient } from './queryClient';
 /**
  * Unlike the web app (where the Express server serves the SPA and the API
  * from the same origin, so a relative '/api' works), a native app is always
- * cross-origin and needs an absolute URL.
- *
- * Override per-environment via app.json -> expo.extra.apiBaseUrl.
- * Defaults: 10.0.2.2 is the Android emulator's alias for the host machine's
- * localhost. Use your LAN IP (e.g. http://192.168.1.5:3000/api) for a
- * physical device, or the Railway URL for production.
+ * cross-origin and needs an absolute URL. The address is built in (app.json
+ * extra.apiBaseUrl) and can be moved from Super Admin → Mobile app — see
+ * appConfig.ts.
  */
-export const API_BASE: string =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined)?.apiBaseUrl ??
-  'http://10.0.2.2:3000/api';
 
 export interface PageMeta {
   total: number;
@@ -83,6 +77,8 @@ function getAuthHeader(): Record<string, string> {
   const activeTenantId = getActiveTenantId();
   return {
     'Content-Type': 'application/json',
+    'x-app-version': APP_VERSION,
+    'x-app-platform': APP_PLATFORM,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(activeTenantId ? { 'x-tenant-id': activeTenantId } : {}),
   };
@@ -96,12 +92,12 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${url}`, { ...options, headers });
+    response = await fetch(`${getApiBase()}${url}`, { ...options, headers });
   } catch {
     // Native fetch throws on unreachable host — surface something actionable
     // instead of a bare "Network request failed".
     throw new ApiError(
-      `Cannot reach the server at ${API_BASE}. Check that the backend is running and that apiBaseUrl in app.json points at it.`,
+      `Cannot reach the server at ${getApiBase()}. Check that the backend is running and that apiBaseUrl in app.json points at it.`,
       0
     );
   }
@@ -114,6 +110,9 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 
   const data = await response.json().catch(() => ({} as any));
+
+  // This copy of the app is older than Super Admin's minimum version.
+  if (response.status === 426) markUpdateRequired({ message: (data as any).error, updateUrl: (data as any).updateUrl });
 
   if (!response.ok) {
     throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status);
@@ -146,11 +145,18 @@ export const api = {
     const token = getToken();
     if (!token) return;
     try {
-      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const pushToken = getPushToken();
+      await fetch(`${getApiBase()}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'x-app-version': APP_VERSION },
+        body: JSON.stringify(pushToken ? { pushToken } : {}),
+      });
     } catch {
       // Local session cleanup still proceeds when the server is unreachable.
     }
   },
+  registerPushDevice: (token: string, info: { platform: string; appVersion: string; deviceName?: string }) =>
+    request<{ registered: boolean }>('/me/push-devices', { method: 'POST', body: JSON.stringify({ token, ...info }) }),
   getMe: () => request<{ user: User; tenant?: Tenant; customer?: Customer; permissionKeys?: string[] }>('/auth/me'),
   changePassword: (newPassword: string) =>
     request<{ success: boolean }>('/auth/change-password', {
@@ -233,7 +239,7 @@ export const api = {
     request<{ documents: ProjectDocument[]; meta?: PageMeta }>(`/documents${qs(params)}`),
   getFileUrl: async (fileId: string): Promise<string> => {
     const data = await request<{ url: string }>(`/files/${encodeURIComponent(fileId)}/url`);
-    return data.url.startsWith('http') ? data.url : `${API_BASE.replace(/\/api\/?$/, '')}${data.url}`;
+    return data.url.startsWith('http') ? data.url : `${getApiBase().replace(/\/api\/?$/, '')}${data.url}`;
   },
   createDocument: (data: Partial<ProjectDocument>) =>
     request<{ document: ProjectDocument }>('/documents', { method: 'POST', body: JSON.stringify(data) }),
@@ -243,16 +249,17 @@ export const api = {
     const token = getToken(); const activeTenantId = getActiveTenantId();
     let response: Response;
     try {
-      response = await fetch(`${API_BASE}/files/upload`, {
+      response = await fetch(`${getApiBase()}/files/upload`, {
         method: 'POST',
         headers: {
+          'x-app-version': APP_VERSION,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(activeTenantId ? { 'x-tenant-id': activeTenantId } : {}),
         },
         body: formData,
       });
     } catch {
-      throw new ApiError(`Cannot reach the server at ${API_BASE}.`, 0);
+      throw new ApiError(`Cannot reach the server at ${getApiBase()}.`, 0);
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new ApiError((data as any).error || 'Failed to upload file', response.status);

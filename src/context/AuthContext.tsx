@@ -8,6 +8,8 @@ import {
 } from '../lib/session';
 import type { User, Customer, Tenant } from '../types';
 import { queryClient } from '../lib/queryClient';
+import { checkAppConfig, loadSavedApiBase } from '../lib/appConfig';
+import { registerForPush } from '../lib/push';
 
 interface AuthContextType {
   user: User | null;
@@ -53,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // the web app.
       setTenant(data.tenant ?? null);
       setPermissionKeys(data.permissionKeys ?? []);
+      void registerForPush(api.registerPushDevice);
     } catch {
       await logout();
     }
@@ -61,6 +64,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Boot: hydrate the token from SecureStore, then resolve the session.
   useEffect(() => {
     (async () => {
+      // Server address and "must update?" first (Super Admin → Mobile app); never hold the splash for long.
+      await loadSavedApiBase();
+      await Promise.race([checkAppConfig(), new Promise((r) => setTimeout(r, 2500))]);
       const { token } = await restoreSession();
       if (token) await refreshUser();
       setIsLoading(false);
@@ -78,6 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(res.user);
       setCustomer(res.customer ?? null);
       setPermissionKeys(res.permissionKeys ?? []);
+      void registerForPush(api.registerPushDevice);
       if (res.tenant) {
         setTenant(res.tenant);
         if (res.user.role !== 'SUPER_ADMIN') {

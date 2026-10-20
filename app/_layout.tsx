@@ -10,6 +10,9 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AppTopBar } from '../src/components/AppTopBar';
 import { queryClient } from '../src/lib/queryClient';
+import { UpdateBanner, UpdateBlocker } from '../src/components/UpdateGate';
+import { checkAppConfig } from '../src/lib/appConfig';
+import { onNotificationTap } from '../src/lib/push';
 
 SplashScreen.setOptions({
   duration: 400,
@@ -61,6 +64,9 @@ function AuthGate() {
     }
   }, [isAuthenticated, isLoading, minimumSplashElapsed, segments, router]);
 
+  // Tapping a push notification opens the notifications screen.
+  useEffect(() => onNotificationTap(() => { if (isAuthenticated) router.push('/notifications'); }), [isAuthenticated, router]);
+
   if (isLoading || !minimumSplashElapsed) {
     return <AppBootSplash />;
   }
@@ -68,6 +74,7 @@ function AuthGate() {
   return (
     <View className="flex-1 bg-slate-950">
       {isAuthenticated ? <AppTopBar /> : null}
+      <UpdateBanner withTopInset={!isAuthenticated} />
       <View className="flex-1">
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="login" />
@@ -75,6 +82,7 @@ function AuthGate() {
           <Stack.Screen name="(screens)" />
         </Stack>
       </View>
+      <UpdateBlocker />
     </View>
   );
 }
@@ -84,6 +92,8 @@ export default function RootLayout() {
     if (Platform.OS === 'web') return;
     const subscription = AppState.addEventListener('change', (status) => {
       focusManager.setFocused(status === 'active');
+      // Picks up a new minimum version / server address without a restart.
+      if (status === 'active') void checkAppConfig();
     });
     return () => subscription.remove();
   }, []);
