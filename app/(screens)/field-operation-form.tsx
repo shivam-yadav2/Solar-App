@@ -1,12 +1,95 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+import { loadProjects } from '../../src/lib/pickers';
+import { Button, DateField, FormSection, Screen, SelectField, space, T, Tap, TextField, ToggleField, haptic, num, todayISO, useOverlay, useTheme, radius } from '../../src/ds';
+import { PhotosField, Attached } from '../../src/components/AttachField';
 
-export default function FieldOperationFormScreen() {
-  const router = useRouter(); const { mode = 'attendance' } = useLocalSearchParams<{ mode?: string }>(); const [employees, setEmployees] = useState<any[]>([]); const [projects, setProjects] = useState<any[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [form, setForm] = useState<any>({ employeeId: '', date: new Date().toISOString().slice(0, 10), status: 'Present', assignedProjectId: '', notes: '', projectId: '', reportDate: new Date().toISOString().slice(0, 10), structureMountingProgressPct: '0', panelInstallationProgressPct: '0', wiringInverterProgressPct: '0', laborCountOnSite: '0', workCompletedToday: '', blockersOrDelays: '', weatherConditions: '' });
-  useEffect(() => { Promise.all([api.getEmployees({ limit: '100' }), api.getProjects({ limit: '100' })]).then(([e, p]) => { setEmployees(e.employees); setProjects(p.projects); }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const save = async () => { setSaving(true); try { if (mode === 'dpr') { if (!form.projectId || !form.workCompletedToday.trim()) throw new Error('Project and completed work are required.'); await api.createDpr(form.projectId, form); } else { if (!form.employeeId) throw new Error('Employee is required.'); await api.punchIn(form); } router.back(); } catch (e: any) { Alert.alert('Could not save field record', e.message); } finally { setSaving(false); } };
-  return <Screen title={mode === 'dpr' ? 'Daily Progress Report' : 'Attendance Punch-in'} subtitle="On-site execution tracking" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <Card>{mode === 'dpr' ? <><OptionField label="Project *" value={form.projectId} onChange={set('projectId')} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /><FormField label="Report date" value={form.reportDate} onChangeText={set('reportDate')} /><FormField label="Structure progress (%)" value={form.structureMountingProgressPct} onChangeText={set('structureMountingProgressPct')} keyboardType="numeric" /><FormField label="Panel installation (%)" value={form.panelInstallationProgressPct} onChangeText={set('panelInstallationProgressPct')} keyboardType="numeric" /><FormField label="Wiring / inverter (%)" value={form.wiringInverterProgressPct} onChangeText={set('wiringInverterProgressPct')} keyboardType="numeric" /><FormField label="Labor count" value={form.laborCountOnSite} onChangeText={set('laborCountOnSite')} keyboardType="numeric" /><FormField label="Work completed today" value={form.workCompletedToday} onChangeText={set('workCompletedToday')} multiline required /><FormField label="Blockers / delays" value={form.blockersOrDelays} onChangeText={set('blockersOrDelays')} multiline /><FormField label="Weather" value={form.weatherConditions} onChangeText={set('weatherConditions')} /></> : <><OptionField label="Employee *" value={form.employeeId} onChange={set('employeeId')} options={employees.filter(item => item.status === 'Active').map(item => ({ value: item.id, label: `${item.name} · ${item.role}` }))} /><FormField label="Date" value={form.date} onChangeText={set('date')} /><ChoiceField label="Status" value={form.status} options={['Present', 'Absent', 'Half Day', 'On Leave', 'Holiday', 'Site Duty']} onChange={set('status')} /><OptionField label="Assigned project" value={form.assignedProjectId} onChange={set('assignedProjectId')} options={[{ value: '', label: 'No project' }, ...projects.map(item => ({ value: item.id, label: item.projectName }))]} /><FormField label="Notes" value={form.notes} onChangeText={set('notes')} multiline /></>}<PrimaryButton label={saving ? 'Saving…' : 'Save Record'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+const STEPS = [0, 25, 50, 75, 100];
+
+/** Percentage picker: five taps instead of typing numbers on site. */
+const Pct: React.FC<{ label: string; value: number; onChange: (v: number) => void }> = ({ label, value, onChange }) => {
+  const p = useTheme();
+  return (
+    <View style={{ paddingHorizontal: space.l, paddingVertical: 10, gap: 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><T variant="footnote" color="secondary">{label}</T><T variant="footnote" num weight="600">{value}%</T></View>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {STEPS.map((s) => (
+          <Tap key={s} onPress={() => { haptic.tap(); onChange(s); }} scaleTo={0.94} style={{ flex: 1, height: 34, borderRadius: radius.s, alignItems: 'center', justifyContent: 'center', backgroundColor: value >= s && s > 0 ? p.accent : value === 0 && s === 0 ? p.fillStrong : p.fill }}>
+            <T variant="footnote" weight="600" style={{ color: value >= s && s > 0 ? p.onAccent : p.label }}>{s}</T>
+          </Tap>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+export default function SiteReportForm() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ projectId?: string }>();
+  const { toast } = useOverlay();
+  const [project, setProject] = useState<{ value: string; label: string } | null>(params.projectId ? { value: params.projectId, label: '' } : null);
+  const [date, setDate] = useState(todayISO());
+  const [pct, setPct] = useState({ structure: 0, panels: 0, wiring: 0 });
+  const [labour, setLabour] = useState('');
+  const [work, setWork] = useState('');
+  const [blockers, setBlockers] = useState('');
+  const [weather, setWeather] = useState('');
+  const [photos, setPhotos] = useState<Attached[]>([]);
+  const [gps, setGps] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!params.projectId) return;
+    api.getProject(params.projectId).then((r) => setProject({ value: r.project.id, label: r.project.projectName })).catch(() => {});
+    api.getDpr(params.projectId).then((r) => { const last = r.reports?.[0]; if (last) setPct({ structure: last.structureMountingProgressPct, panels: last.panelInstallationProgressPct, wiring: last.wiringInverterProgressPct }); }).catch(() => {});
+  }, [params.projectId]);
+
+  const save = async () => {
+    if (!project) { toast('Choose the project', 'error'); haptic.error(); return; }
+    if (!work.trim()) { toast('Write what was done today', 'error'); haptic.error(); return; }
+    setSaving(true);
+    try {
+      let coords: { latitude: number; longitude: number } | null = null;
+      if (gps) {
+        const perm = await Location.requestForegroundPermissionsAsync().catch(() => null);
+        if (perm?.granted) coords = (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null))?.coords || null;
+      }
+      await api.createDpr(project.value, {
+        reportDate: date, structureMountingProgressPct: pct.structure, panelInstallationProgressPct: pct.panels, wiringInverterProgressPct: pct.wiring,
+        laborCountOnSite: num(labour), workCompletedToday: work.trim(), blockersOrDelays: blockers.trim() || undefined, weatherConditions: weather.trim() || undefined,
+        gpsLatitude: coords?.latitude, gpsLongitude: coords?.longitude, sitePhotos: photos.map((x) => x.fileId),
+      });
+      haptic.success();
+      toast('Site report sent');
+      router.back();
+    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+
+  return (
+    <Screen title="Site report" large={false} back backLabel="Cancel" right={<Button title="Send" size="s" loading={saving} onPress={save} />}>
+      <FormSection>
+        <SelectField label="Project" required value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" onChange={(o) => setProject(o)} />
+        <DateField label="Date" value={date} onChange={setDate} maximumDate={new Date()} />
+      </FormSection>
+      <FormSection header="Progress" footer="Overall progress so far, not just today.">
+        <Pct label="Structure & mounting" value={pct.structure} onChange={(v) => setPct((s) => ({ ...s, structure: v }))} />
+        <Pct label="Panels installed" value={pct.panels} onChange={(v) => setPct((s) => ({ ...s, panels: v }))} />
+        <Pct label="Wiring & inverter" value={pct.wiring} onChange={(v) => setPct((s) => ({ ...s, wiring: v }))} />
+      </FormSection>
+      <FormSection header="Today">
+        <TextField label="Work done" value={work} onChange={setWork} multiline required placeholder="e.g. Structure fixed on east side, 6 panels mounted" />
+        <TextField label="People on site" kind="number" value={labour} onChange={setLabour} />
+        <TextField label="Problems / delays" value={blockers} onChange={setBlockers} multiline placeholder="Optional — e.g. waiting for inverter" />
+        <TextField label="Weather" value={weather} onChange={setWeather} placeholder="Optional" />
+      </FormSection>
+      <FormSection>
+        <PhotosField label="Site photos" value={photos} onChange={setPhotos} />
+        <ToggleField label="Attach my location" value={gps} onChange={setGps} />
+      </FormSection>
+      <Button title="Send report" loading={saving} onPress={save} full />
+    </Screen>
+  );
 }

@@ -1,31 +1,142 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ArrowDownToLine, ArrowUpFromLine, Boxes, PackageMinus, Plus, Undo2 } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { Badge, Card, EmptyState, ErrorState, FormField, HeaderButton, Loading, OptionField, Screen, StatCard } from '../../src/components/ui';
-import { formatDate, formatINR } from '../../src/lib/formatters';
+import { useApi } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
+import { loadProjects } from '../../src/lib/pickers';
+import { formatDateTime, formatINR } from '../../src/lib/formatters';
+import {
+  Badge, Button, EmptyState, ErrorState, FormSection, GroupedItem, GUTTER, IconButton, IconTile, InfoRow, ListScreen, ListSkeleton, Row, SearchBar, Section, Segmented, SelectField, Sheet, space, T, TextField,
+  useOverlay, useTheme, haptic, num, radius, elevation, formatMoneyCompact,
+} from '../../src/ds';
+import type { InventoryItem, InventoryStockMovement, StockMovementType } from '../../src/types';
 
-const tabs = ['Stock', 'Movements', 'Project BoQ', 'Assets'] as const;
-const nextStatus: Record<string, string> = { Planned: 'Partially Dispatched', 'Partially Dispatched': 'Fully Dispatched', 'Fully Dispatched': 'Installed/Consumed' };
+type Mode = 'stock' | 'low' | 'moves';
+const MOVES: { type: StockMovementType; label: string; icon: any; tone: 'green' | 'blue' | 'teal' | 'red' }[] = [
+  { type: 'PURCHASE_IN', label: 'Stock in (purchase)', icon: ArrowDownToLine, tone: 'green' },
+  { type: 'PROJECT_DISPATCH_OUT', label: 'Send to a site', icon: ArrowUpFromLine, tone: 'blue' },
+  { type: 'RETURN_IN', label: 'Returned from site', icon: Undo2, tone: 'teal' },
+  { type: 'ADJUSTMENT_WRITE_OFF', label: 'Write off (damaged / lost)', icon: PackageMinus, tone: 'red' },
+];
+const moveLabel = (t: string) => MOVES.find((m) => m.type === t)?.label || t;
 
 export default function InventoryScreen() {
-  const router = useRouter(); const { hasPermission } = useAuth(); const state = useFetch(() => api.getInventory()); const [tab, setTab] = useState('Stock'); const [query, setQuery] = useState(''); const [projects, setProjects] = useState<any[]>([]); const [projectId, setProjectId] = useState(''); const [boq, setBoq] = useState<any[]>([]); const [boqError, setBoqError] = useState(''); const [assets, setAssets] = useState<any[]>([]); const [assetsError, setAssetsError] = useState('');
-  const items = state.data?.items ?? []; const movements = state.data?.movements ?? [];
-  useEffect(() => { api.getProjects({ limit: '100' }).then(x => { setProjects(x.projects); if (x.projects[0]) setProjectId(x.projects[0].id); }).catch(() => undefined); }, []);
-  useEffect(() => { if (!projectId) return; Promise.all([api.getProjectBoq(projectId), api.getProjectEquipmentAssets(projectId)]).then(([boqData, assetData]) => { setBoq(boqData.items); setAssets(assetData.assets); setBoqError(''); setAssetsError(''); }).catch(e => { setBoqError(e.message); setAssetsError(e.message); }); }, [projectId]);
-  const filtered = useMemo(() => items.filter(item => `${item.itemName} ${item.itemCode} ${item.category}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
-  const advanceBoq = async (item: any) => { const status = nextStatus[item.status]; if (!status) return; try { await api.updateProjectBoqItem(item.id, { status: status as any }); setBoq(current => current.map(entry => entry.id === item.id ? { ...entry, status } : entry)); } catch (e: any) { Alert.alert('Could not update BoQ status', e.message); } };
-  const markInstalled = (asset: any) => Alert.alert('Mark equipment installed?', `${asset.serialNumber} will be recorded as installed at this customer site.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Mark installed', onPress: async () => { try { const result = await api.markEquipmentInstalled(asset.id); setAssets(current => current.map(item => item.id === asset.id ? result.asset : item)); } catch (e: any) { Alert.alert('Could not update equipment', e.message); } } }]);
-  return <Screen title="Inventory & BoQ" subtitle="Stock, dispatches, and project material planning" onBack={() => router.back()} action={hasPermission('inventory.manage') ? <HeaderButton label="Add" onPress={() => router.push('/inventory-form')} /> : undefined} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <>
-      <View className="flex-row gap-3"><View className="flex-1"><StatCard label="Items" value={String(items.length)} /></View><View className="flex-1"><StatCard label="Low Stock" value={String(state.data?.lowStockCount ?? 0)} accent="text-rose-600" /></View></View>
-      <View className="mb-3 flex-row rounded-xl bg-slate-100 p-1">{tabs.map(name => <Pressable key={name} onPress={() => setTab(name)} className={`flex-1 rounded-lg px-1 py-2.5 ${tab === name ? 'bg-white' : ''}`}><Text className={`text-center text-[11px] font-bold ${tab === name ? 'text-slate-900' : 'text-slate-500'}`}>{name}</Text></Pressable>)}</View>
-      {tab === 'Stock' ? <><FormField label="Search stock" value={query} onChangeText={setQuery} placeholder="Item, code or category" />{hasPermission('inventory.manage') ? <Card><HeaderButton label="Record Stock Movement" onPress={() => router.push({ pathname: '/inventory-form', params: { mode: 'movement' } })} /><View className="h-2" /><HeaderButton label="Add Project BoQ Item" onPress={() => router.push({ pathname: '/inventory-form', params: { mode: 'boq' } })} /></Card> : null}{filtered.length === 0 ? <EmptyState message="No inventory items match this search." /> : filtered.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.itemName}</Text><Text className="mt-1 text-xs text-slate-500">{item.itemCode} · {item.category} · {item.brand || 'Generic'}</Text></View><Badge text={item.currentStock <= item.minimumReorderLevel ? 'Low stock' : 'In stock'} tone={item.currentStock <= item.minimumReorderLevel ? 'rose' : 'green'} /></View><Text className="mt-3 text-xl font-bold text-slate-900">{item.currentStock} <Text className="text-xs font-normal text-slate-400">{item.unitOfMeasure}</Text></Text><Text className="mt-1 text-xs text-slate-500">Cost {formatINR(item.costPricePerUnit)} · Reorder at {item.minimumReorderLevel} · GST {item.gstRatePercent}%</Text></Card>)}</> : null}
-      {tab === 'Movements' ? <>{movements.length === 0 ? <EmptyState message="No stock movements yet." /> : movements.map(item => <Card key={item.id}><View className="flex-row justify-between"><Badge text={item.movementType.replaceAll('_', ' ')} tone={item.movementType.includes('OUT') || item.movementType.includes('WRITE') ? 'rose' : 'green'} /><Text className="text-xs font-bold text-slate-700">{item.quantity}</Text></View><Text className="mt-2 text-xs text-slate-600">{item.vendorSupplier || 'Internal movement'} {item.referenceChallanNo ? `· ${item.referenceChallanNo}` : ''}</Text><Text className="mt-1 text-[10px] text-slate-400">{formatDate(item.createdAt)} · Stock {item.previousStock} → {item.resultingStock} · {formatINR(item.totalCost)}</Text></Card>)}</> : null}
-      {tab === 'Project BoQ' ? <><Card><OptionField label="Project" value={projectId} onChange={setProjectId} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /></Card>{boqError ? <ErrorState message={boqError} /> : boq.length === 0 ? <EmptyState message="No BoQ items for this project." /> : boq.map(item => <Card key={item.id}><View className="flex-row justify-between gap-2"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.itemName}</Text><Text className="mt-1 text-xs text-slate-500">{item.category} · {formatINR(item.unitCostEstimate)} / {item.unit}</Text></View><Badge text={item.status} tone={item.status === 'Installed/Consumed' || item.status === 'Fully Dispatched' ? 'green' : 'amber'} /></View><View className="mt-3 flex-row border-t border-slate-100 pt-3"><View className="flex-1"><Text className="text-[10px] text-slate-400">PLANNED</Text><Text className="text-sm font-bold">{item.plannedQuantity}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">DISPATCHED</Text><Text className="text-sm font-bold text-blue-700">{item.dispatchedQuantity}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">CONSUMED</Text><Text className="text-sm font-bold text-emerald-700">{item.consumedQuantity}</Text></View></View>{hasPermission('inventory.manage') && nextStatus[item.status] ? <Pressable onPress={() => void advanceBoq(item)} className="mt-3 self-end"><Text className="text-xs font-bold text-blue-700">Advance to {nextStatus[item.status]}</Text></Pressable> : null}{item.notes ? <Text className="mt-2 text-xs text-slate-500">{item.notes}</Text> : null}</Card>)}</> : null}
-      {tab === 'Assets' ? <><Card><OptionField label="Project site" value={projectId} onChange={setProjectId} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /></Card>{assetsError ? <ErrorState message={assetsError} /> : assets.length === 0 ? <EmptyState message="No serialised equipment has been dispatched to this project." /> : assets.map(asset => <Card key={asset.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{asset.equipmentType}</Text><Text className="mt-1 text-xs font-mono text-slate-500">{asset.serialNumber}</Text></View><Badge text={asset.status.replaceAll('_', ' ')} tone={asset.status === 'INSTALLED' ? 'green' : asset.status === 'DISPATCHED' ? 'amber' : 'slate'} /></View><Text className="mt-3 text-xs text-slate-600">{[asset.brand, asset.modelNumber].filter(Boolean).join(' · ') || 'Make / model not recorded'}</Text>{asset.warrantyExpiry ? <Text className="mt-1 text-[11px] text-slate-400">Warranty through {formatDate(asset.warrantyExpiry)}</Text> : null}{hasPermission('inventory.manage') && asset.status === 'DISPATCHED' ? <Pressable onPress={() => markInstalled(asset)} className="mt-3 self-end"><Text className="text-xs font-bold text-emerald-700">Mark installed</Text></Pressable> : null}</Card>)}</> : null}
-    </>}
-  </Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const { hasPermission: can } = useAuth();
+  const q = useApi(['inventory', 'all'], api.getInventory);
+  const [mode, setMode] = useState<Mode>('stock');
+  const [text, setText] = useState('');
+  const [open, setOpen] = useState<InventoryItem | null>(null);
+  const items: InventoryItem[] = q.data?.items || [];
+  const moves: InventoryStockMovement[] = q.data?.movements || [];
+  const low = items.filter((i) => Number(i.currentStock) <= Number(i.minimumReorderLevel || 0));
+  const value = items.reduce((s, i) => s + Number(i.currentStock || 0) * Number(i.costPricePerUnit || 0), 0);
+  const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const t = text.trim().toLowerCase();
+  const shownItems = (mode === 'low' ? low : items).filter((i) => !t || `${i.itemName} ${i.itemCode} ${i.brand || ''} ${i.category}`.toLowerCase().includes(t));
+  const shownMoves = moves.filter((m) => !t || `${itemById.get(m.itemId)?.itemName || ''} ${m.vendorSupplier || ''} ${m.referenceChallanNo || ''}`.toLowerCase().includes(t));
+  const data: any[] = q.loading ? [] : mode === 'moves' ? shownMoves : shownItems;
+
+  return (
+    <>
+      <ListScreen<any>
+        title="Inventory" back large={false}
+        right={can('inventory.manage') ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New item" onPress={() => router.push('/inventory-form')} /> : undefined}
+        header={<>
+          <View style={[{ backgroundColor: p.surface, borderRadius: radius.l, padding: space.l, flexDirection: 'row' }, elevation(p, 1)]}>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Items</T><T variant="title2" num>{items.length}</T></View>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Low stock</T><T variant="title2" num color={low.length ? 'orange' : 'label'}>{low.length}</T></View>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Stock value</T><T variant="title2" num>{formatMoneyCompact(value)}</T></View>
+          </View>
+          <Segmented<Mode> value={mode} onChange={setMode} options={[{ value: 'stock', label: 'Stock' }, { value: 'low', label: `Low${low.length ? ` · ${low.length}` : ''}` }, { value: 'moves', label: 'Movements' }]} />
+          <SearchBar value={text} onChange={setText} placeholder={mode === 'moves' ? 'Item, vendor or challan' : 'Item, code or brand'} />
+          {q.loading ? <ListSkeleton avatar={false} /> : q.error ? <ErrorState message={q.error} onRetry={q.refresh} /> : null}
+        </>}
+        data={data}
+        keyExtractor={(x) => x.id}
+        refreshing={q.refreshing}
+        onRefresh={q.refresh}
+        ListEmptyComponent={!q.loading ? <EmptyState icon={<Boxes size={44} color={p.tertiary} />} title={mode === 'low' ? 'Nothing running low' : mode === 'moves' ? 'No stock movements' : 'No items yet'} action={mode === 'stock' && can('inventory.manage') && !t ? { title: 'Add item', onPress: () => router.push('/inventory-form') } : undefined} /> : null}
+        renderItem={({ item: x, index }) => (
+          <GroupedItem index={index} count={data.length} inset={mode === 'moves' ? 58 : 16}>
+            {mode === 'moves' ? (() => {
+              const m = MOVES.find((mv) => mv.type === x.movementType) || MOVES[0];
+              const Icon = m.icon;
+              const out = x.movementType === 'PROJECT_DISPATCH_OUT' || x.movementType === 'ADJUSTMENT_WRITE_OFF';
+              return <Row icon={<IconTile icon={<Icon size={17} color={p[m.tone]} />} tone={m.tone} />} title={itemById.get(x.itemId)?.itemName || 'Item'} subtitle={`${moveLabel(x.movementType)} · ${formatDateTime(x.createdAt)}${x.vendorSupplier ? ` · ${x.vendorSupplier}` : ''}`}
+                accessory={<T variant="subhead" num weight="600" color={out ? 'red' : 'green'}>{out ? '−' : '+'}{x.quantity}</T>} />;
+            })() : (
+              <Row title={x.itemName} subtitle={[x.itemCode, x.brand, x.category].filter(Boolean).join(' · ')}
+                accessory={<View style={{ alignItems: 'flex-end', gap: 2 }}><T variant="headline" num color={Number(x.currentStock) <= Number(x.minimumReorderLevel || 0) ? 'orange' : 'label'}>{x.currentStock}</T><T variant="caption2" color="secondary">{x.unitOfMeasure}</T></View>}
+                onPress={() => setOpen(x)} />
+            )}
+          </GroupedItem>
+        )}
+      />
+      <ItemSheet item={open} onClose={() => setOpen(null)} onChanged={() => { setOpen(null); void q.refresh(); }} />
+    </>
+  );
+}
+
+function ItemSheet({ item, onClose, onChanged }: { item: InventoryItem | null; onClose: () => void; onChanged: () => void }) {
+  const p = useTheme();
+  const { hasPermission: can } = useAuth();
+  const { toast } = useOverlay();
+  const [type, setType] = useState<StockMovementType | null>(null);
+  const [qty, setQty] = useState(''); const [project, setProject] = useState<{ value: string; label: string } | null>(null);
+  const [vendor, setVendor] = useState(''); const [challan, setChallan] = useState(''); const [serials, setSerials] = useState(''); const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  React.useEffect(() => { setType(null); setQty(''); setProject(null); setVendor(''); setChallan(''); setSerials(''); setNotes(''); }, [item]);
+  if (!item) return null;
+  const serialised = item.category === 'Solar Panel' || item.category === 'Inverter';
+  const save = async () => {
+    if (!type) return;
+    if (num(qty) <= 0) { toast('Enter the quantity', 'error'); return; }
+    if (type === 'PROJECT_DISPATCH_OUT' && !project) { toast('Choose the project', 'error'); return; }
+    const list = serials.split(/[\n,]+/).map((x) => x.trim()).filter(Boolean);
+    if (type === 'PROJECT_DISPATCH_OUT' && serialised && !list.length) { toast('Enter the serial numbers being sent', 'error'); return; }
+    setBusy(true);
+    try {
+      await api.createStockMovement({ itemId: item.id, movementType: type, quantity: num(qty), linkedProjectId: project?.value, vendorSupplier: vendor || undefined, referenceChallanNo: challan || undefined, notes: notes || undefined, serialNumbers: list.length ? list : undefined });
+      haptic.success();
+      toast(`${moveLabel(type)}: ${qty} ${item.unitOfMeasure}`);
+      onChanged();
+    } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Sheet visible onClose={onClose} title={item.itemName} full={!!type} footer={type ? <><Button title="Back" kind="gray" onPress={() => setType(null)} style={{ flex: 1 }} /><Button title="Save" loading={busy} onPress={save} style={{ flex: 1 }} /></> : undefined}>
+      <View style={{ paddingHorizontal: GUTTER, gap: space.m, paddingBottom: space.m }}>
+        {!type ? (
+          <>
+            <Section>
+              <InfoRow label="In stock" value={`${item.currentStock} ${item.unitOfMeasure}`} />
+              <InfoRow label="Reorder at" value={`${item.minimumReorderLevel} ${item.unitOfMeasure}`} />
+              <InfoRow label="Cost / sell" value={`${formatINR(item.costPricePerUnit)} / ${formatINR(item.sellingPricePerUnit)}`} />
+              <InfoRow label="Code" value={item.itemCode} />
+              {item.brand ? <InfoRow label="Brand" value={[item.brand, item.modelNumber].filter(Boolean).join(' ')} /> : null}
+              {item.warehouseLocation ? <InfoRow label="Location" value={item.warehouseLocation} /> : null}
+              {Number(item.currentStock) <= Number(item.minimumReorderLevel || 0) ? <InfoRow label="" value={<Badge text="Running low — reorder" tone="orange" />} /> : null}
+            </Section>
+            {can('inventory.manage') ? (
+              <Section>
+                {MOVES.map((m) => { const Icon = m.icon; return <Row key={m.type} icon={<IconTile icon={<Icon size={17} color={p[m.tone]} />} tone={m.tone} />} title={m.label} onPress={() => setType(m.type)} />; })}
+              </Section>
+            ) : null}
+          </>
+        ) : (
+          <FormSection header={moveLabel(type)} footer={`Now ${item.currentStock} ${item.unitOfMeasure} in stock.`}>
+            <TextField label={`Quantity (${item.unitOfMeasure})`} kind="decimal" value={qty} onChange={setQty} autoFocus />
+            {type === 'PROJECT_DISPATCH_OUT' || type === 'RETURN_IN' ? <SelectField label="Project" value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" onChange={(o) => setProject(o)} required={type === 'PROJECT_DISPATCH_OUT'} /> : null}
+            {type === 'PURCHASE_IN' ? <TextField label="Supplier" kind="name" value={vendor} onChange={setVendor} /> : null}
+            <TextField label="Challan / bill no." value={challan} onChange={setChallan} placeholder="Optional" />
+            {serialised && type !== 'ADJUSTMENT_WRITE_OFF' ? <TextField label="Serial numbers" value={serials} onChange={setSerials} multiline placeholder="One per line or comma-separated" hint={type === 'PROJECT_DISPATCH_OUT' ? 'Required — they go on the warranty and invoice.' : undefined} /> : null}
+            <TextField label="Notes" value={notes} onChange={setNotes} multiline />
+          </FormSection>
+        )}
+      </View>
+    </Sheet>
+  );
 }

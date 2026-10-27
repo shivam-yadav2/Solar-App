@@ -34,3 +34,12 @@ export const ops = {
 
   track: (action: string, entity: string, entityId?: string, entityCustomId?: string) => http.post('/activity/track', { action, entity, entityId, entityCustomId }).catch(() => undefined),
 };
+
+export const field = {
+  reports: (params: { page?: number; limit?: number; projectId?: string }) => http.get<{ reports: any[]; total: number; page: number; totalPages: number }>(`/dpr${qs(params as any)}`),
+  report: (id: string) => http.get<{ report: any }>(`/dpr/${id}`),
+};
+
+export const discom = {
+  overview: () => http.get<{ projects: { projectId: string; projectName: string; customId: string; capacityKw: number; netMeteringStatus?: string; approved: number; total: number; started: boolean; latestStage?: string; latestStatus?: string; latestAt?: string; blockedStage?: string; blockedStatus?: string }[] }>('/discom/overview'),
+};

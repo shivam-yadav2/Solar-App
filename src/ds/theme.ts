@@ -164,6 +164,6 @@ export function statusTone(status?: string): Tone {
   if (/(paid|won|completed|commission|active|approved|resolved|installed|closed|success|delivered|enabled|valid|done)/.test(s)) return 'green';
   if (/(overdue|lost|cancel|reject|failed|expired|locked|suspended|void|error|refund|critical|high)/.test(s)) return 'red';
   if (/(pending|due|partial|draft|grace|warning|hold|review|waiting|medium|trial|read)/.test(s)) return 'orange';
-  if (/(progress|open|sent|new|installation|survey|design|quoted|scheduled|assigned|planning|booked|material|dispatched|planned)/.test(s)) return 'blue';
+  if (/(progress|open|sent|new|installation|survey|design|quoted|scheduled|assigned|planning|booked|material|dispatched|planned|contacted|survey|proposal|negotiation|viewed)/.test(s)) return 'blue';
   return 'gray';
 }

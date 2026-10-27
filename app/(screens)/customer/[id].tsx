@@ -101,7 +101,7 @@ export default function CustomerDetail() {
 
           {docs.length ? (
             <Section header={`Documents · ${docs.length}`}>
-              {docs.slice(0, 6).map((x) => <Row key={x.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={x.title || x.fileName} subtitle={x.category} onPress={() => go('/documents', { customerId: c.id })} />)}
+              {docs.slice(0, 6).map((x) => <Row key={x.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={x.name || x.fileName} subtitle={x.category} onPress={() => go('/documents', { customerId: c.id })} />)}
             </Section>
           ) : null}
 

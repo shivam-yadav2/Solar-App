@@ -1,20 +1,137 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+import { HardHat, LogIn, LogOut, Plus, UsersRound } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, OptionField, Screen, StatCard } from '../../src/components/ui';
-import { formatDate } from '../../src/lib/formatters';
+import { field } from '../../src/lib/apis/ops';
+import { useApi, usePaged, toPage } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
+import { loadProjects } from '../../src/lib/pickers';
+import { formatDate } from '../../src/lib/formatters';
+import {
+  Avatar, Badge, Button, EmptyState, ErrorState, FormSection, GroupedItem, GUTTER, IconButton, IconTile, ListScreen, ListSkeleton, Row, Segmented, SelectField, Sheet, space, T, ToggleField,
+  useOverlay, useTheme, haptic, radius, elevation,
+} from '../../src/ds';
+import { LoadMoreFooter } from '../../src/components/kit';
 
-export default function FieldOperationsScreen() {
-  const router = useRouter(); const { hasPermission } = useAuth(); const [tab, setTab] = useState('Attendance'); const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); const [projects, setProjects] = useState<any[]>([]); const [projectId, setProjectId] = useState(''); const [reports, setReports] = useState<any[]>([]); const [dprError, setDprError] = useState('');
-  const state = useFetch(() => Promise.all([api.getAttendance(month), api.getEmployees({ limit: '100' })]).then(([attendance, employees]) => ({ attendance, employees: employees.employees })), [month]); const records = state.data?.attendance.records ?? []; const names = new Map((state.data?.employees ?? []).map(item => [item.id, item.name]));
-  useEffect(() => { api.getProjects({ limit: '100' }).then(x => { setProjects(x.projects); if (x.projects[0]) setProjectId(x.projects[0].id); }).catch(() => undefined); }, []);
-  useEffect(() => { if (!projectId) return; api.getDpr(projectId).then(x => setReports(x.reports)).catch(e => setDprError(e.message)); }, [projectId]);
-  const punchOut = (item: any) => Alert.alert('Punch out?', 'This records an 8-hour working day.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Punch Out', onPress: async () => { try { await api.punchOut(item.id, { workingHours: 8 }); await state.reload(); } catch (e: any) { Alert.alert('Could not punch out', e.message); } } }]);
-  const monthOptions = [0, -1, 1].map(offset => { const date = new Date(); date.setMonth(date.getMonth() + offset); return date.toISOString().slice(0, 7); });
-  return <Screen title="Field Operations" subtitle={tab === 'Attendance' ? `Attendance · ${month}` : 'Daily progress reports'} onBack={() => router.back()} action={hasPermission('attendance.manage') ? <HeaderButton label={tab === 'Attendance' ? 'Punch' : 'New DPR'} onPress={() => router.push({ pathname: '/field-operation-form', params: { mode: tab === 'Attendance' ? 'attendance' : 'dpr', projectId } })} /> : undefined} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <><View className="mb-3 flex-row rounded-xl bg-slate-100 p-1"><Pressable onPress={() => setTab('Attendance')} className={`flex-1 rounded-lg py-2.5 ${tab === 'Attendance' ? 'bg-white' : ''}`}><Text className={`text-center text-xs font-bold ${tab === 'Attendance' ? 'text-slate-900' : 'text-slate-500'}`}>Attendance</Text></Pressable><Pressable onPress={() => setTab('DPR')} className={`flex-1 rounded-lg py-2.5 ${tab === 'DPR' ? 'bg-white' : ''}`}><Text className={`text-center text-xs font-bold ${tab === 'DPR' ? 'text-slate-900' : 'text-slate-500'}`}>Daily Reports</Text></Pressable></View>{tab === 'Attendance' ? <><Card><OptionField label="Month" value={month} onChange={setMonth} options={monthOptions.map(value => ({ value, label: value }))} /></Card><View className="flex-row gap-3"><View className="flex-1"><StatCard label="Records" value={String(records.length)} /></View><View className="flex-1"><StatCard label="Present" value={String(records.filter(item => item.status === 'Present' || item.status === 'Site Duty').length)} accent="text-emerald-700" /></View></View>{records.length === 0 ? <EmptyState message="No attendance records this month." /> : records.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{names.get(item.employeeId) || item.employeeId}</Text><Text className="mt-1 text-xs text-slate-500">{formatDate(item.date)}{item.workingHours ? ` · ${item.workingHours} hours` : ''}</Text></View><Badge text={item.status} tone={item.status === 'Present' || item.status === 'Site Duty' ? 'green' : 'amber'} /></View>{item.assignedProjectId ? <Text className="mt-2 text-xs text-slate-500">Assigned project: {item.assignedProjectId}</Text> : null}{hasPermission('attendance.manage') && item.punchInTime && !item.punchOutTime ? <Pressable onPress={() => punchOut(item)} className="mt-3 self-end"><Text className="text-xs font-bold text-blue-700">Punch Out</Text></Pressable> : null}</Card>)}</> : <><Card><OptionField label="Project" value={projectId} onChange={setProjectId} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /></Card>{dprError ? <ErrorState message={dprError} /> : reports.length === 0 ? <EmptyState message="No daily progress reports for this project." /> : reports.map(item => <Card key={item.id}><View className="flex-row justify-between"><Text className="text-sm font-bold text-slate-900">{formatDate(item.reportDate)}</Text><Badge text={`${Math.round((Number(item.structureMountingProgressPct || 0) + Number(item.panelInstallationProgressPct || 0) + Number(item.wiringInverterProgressPct || 0)) / 3)}% avg`} tone="green" /></View><Text className="mt-2 text-xs leading-5 text-slate-600">{item.workCompletedToday}</Text><View className="mt-3 flex-row gap-2"><Text className="flex-1 text-[10px] text-slate-500">Structure {item.structureMountingProgressPct}%</Text><Text className="flex-1 text-[10px] text-slate-500">Panels {item.panelInstallationProgressPct}%</Text><Text className="flex-1 text-[10px] text-slate-500">Wiring {item.wiringInverterProgressPct}%</Text></View>{item.blockersOrDelays ? <Text className="mt-2 text-xs text-rose-600">Blocker: {item.blockersOrDelays}</Text> : null}<Text className="mt-2 text-[10px] text-slate-400">Labour on site: {item.laborCountOnSite} · Weather: {item.weatherConditions || '—'}</Text></Card>)}</>}</>}
-  </Screen>;
+type Mode = 'today' | 'reports';
+const today = () => new Date().toISOString().slice(0, 10);
+const time = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '');
+
+export default function FieldOperations() {
+  const router = useRouter();
+  const p = useTheme();
+  const { hasPermission: can } = useAuth();
+  const [mode, setMode] = useState<Mode>('today');
+  const [punch, setPunch] = useState<any | null>(null);
+  const emps = useApi(['payroll', 'employees', 'active'], () => api.getEmployees({ limit: '500', status: 'Active' }), { enabled: mode === 'today' });
+  const att = useApi(['attendance', today().slice(0, 7)], () => api.getAttendance(today().slice(0, 7)), { enabled: mode === 'today' });
+  const reports = usePaged<any>(['dpr', 'all'], async (page, limit) => { const r = await field.reports({ page, limit }); return toPage(r.reports, r, page); }, 30, { enabled: mode === 'reports' });
+  const todays = new Map((att.data?.records || []).filter((r) => r.date?.slice(0, 10) === today()).map((r) => [r.employeeId, r]));
+  const employees: any[] = emps.data?.employees || [];
+  const present = employees.filter((e) => todays.has(e.id)).length;
+  const manage = can('attendance.manage');
+
+  const header = (
+    <>
+      <Segmented<Mode> value={mode} onChange={setMode} options={[{ value: 'today', label: 'Attendance today' }, { value: 'reports', label: 'Site reports' }]} />
+      {mode === 'today' && employees.length ? (
+        <View style={[{ backgroundColor: p.surface, borderRadius: radius.l, padding: space.l, flexDirection: 'row' }, elevation(p, 1)]}>
+          <View style={{ flex: 1 }}><T variant="footnote" color="secondary">On duty</T><T variant="title2" num color="green">{present}</T></View>
+          <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Not punched in</T><T variant="title2" num color={employees.length - present ? 'orange' : 'label'}>{employees.length - present}</T></View>
+        </View>
+      ) : null}
+      {(mode === 'today' ? emps.loading || att.loading : reports.loading) ? <ListSkeleton /> : (mode === 'today' ? emps.error || att.error : reports.error) ? <ErrorState message={(mode === 'today' ? emps.error || att.error : reports.error) || ''} onRetry={() => (mode === 'today' ? emps.refresh() : reports.refresh())} /> : null}
+    </>
+  );
+
+  return (
+    <>
+      {mode === 'today' ? (
+        <ListScreen<any>
+          title="Field work" back large={false} header={header}
+          right={manage ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New site report" onPress={() => router.push('/field-operation-form')} /> : undefined}
+          data={emps.loading ? [] : employees} keyExtractor={(e) => e.id}
+          refreshing={emps.refreshing || att.refreshing} onRefresh={() => { void emps.refresh(); void att.refresh(); }}
+          ListEmptyComponent={!emps.loading ? <EmptyState icon={<UsersRound size={44} color={p.tertiary} />} title="No employees" message="Add your installers and site staff in Payroll to track attendance." action={can('payroll.manage') ? { title: 'Add employee', onPress: () => router.push('/employee-form') } : undefined} /> : null}
+          renderItem={({ item: e, index }) => {
+            const r = todays.get(e.id);
+            return (
+              <GroupedItem index={index} count={employees.length} inset={68}>
+                <Row icon={<Avatar name={e.name} />} title={e.name}
+                  subtitle={r ? `In ${time(r.punchInTime)}${r.punchOutTime ? ` · out ${time(r.punchOutTime)} · ${r.workingHours}h` : ''}${r.punchInLatitude ? ' · 📍' : ''}` : e.designation || e.role || 'Not punched in'}
+                  accessory={!manage ? (r ? <Badge text={r.status} /> : undefined) : !r ? <Button title="In" size="s" kind="tinted" icon={<LogIn size={14} color={p.accentText} />} onPress={() => setPunch({ employee: e })} /> : !r.punchOutTime ? <Button title="Out" size="s" kind="gray" icon={<LogOut size={14} color={p.label} />} onPress={() => setPunch({ employee: e, record: r })} /> : <Badge text="Done" tone="green" />}
+                  chevron={false} />
+              </GroupedItem>
+            );
+          }}
+        />
+      ) : (
+        <ListScreen<any>
+          title="Field work" back large={false} header={header}
+          right={manage ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New site report" onPress={() => router.push('/field-operation-form')} /> : undefined}
+          data={reports.loading ? [] : reports.items} keyExtractor={(r) => r.id}
+          refreshing={reports.refreshing} onRefresh={reports.refresh} onEndReached={reports.loadMore}
+          ListEmptyComponent={!reports.loading ? <EmptyState icon={<HardHat size={44} color={p.tertiary} />} title="No site reports yet" message="Installers can send a daily report with photos from the site." action={manage ? { title: 'New site report', onPress: () => router.push('/field-operation-form') } : undefined} /> : null}
+          ListFooterComponent={<LoadMoreFooter loading={reports.loadingMore} hasMore={reports.hasMore} count={reports.items.length} total={reports.total} noun="reports" />}
+          renderItem={({ item: r, index }) => {
+            const avg = Math.round((Number(r.structureMountingProgressPct) + Number(r.panelInstallationProgressPct) + Number(r.wiringInverterProgressPct)) / 3);
+            return (
+              <GroupedItem index={index} count={reports.items.length} inset={58}>
+                <Row icon={<IconTile icon={<HardHat size={17} color={p.teal} />} tone="teal" />} title={r.projectName || 'Project'}
+                  subtitle={`${formatDate(r.reportDate)} · ${avg}% · ${r.laborCountOnSite} on site${(r.sitePhotos || []).length ? ` · ${r.sitePhotos.length} photos` : ''}`}
+                  accessory={r.blockersOrDelays ? <Badge text="Blocked" tone="red" /> : undefined}
+                  onPress={() => router.push({ pathname: '/dpr/[id]', params: { id: r.id } })} />
+              </GroupedItem>
+            );
+          }}
+        />
+      )}
+      <PunchSheet value={punch} onClose={() => setPunch(null)} onDone={() => { setPunch(null); void att.refresh(); }} />
+    </>
+  );
 }
+
+function PunchSheet({ value, onClose, onDone }: { value: { employee: any; record?: any } | null; onClose: () => void; onDone: () => void }) {
+  const { toast } = useOverlay();
+  const [project, setProject] = useState<{ value: string; label: string } | null>(null);
+  const [gps, setGps] = useState(true);
+  const [busy, setBusy] = useState(false);
+  React.useEffect(() => { setProject(null); }, [value]);
+  if (!value) return null;
+  const out = !!value.record;
+  const go = async () => {
+    setBusy(true);
+    try {
+      if (out) {
+        const hours = Math.max(0, Math.round(((Date.now() - new Date(value.record.punchInTime).getTime()) / 36e5) * 10) / 10);
+        await api.punchOut(value.record.id, { punchOutTime: new Date().toISOString(), workingHours: hours });
+        toast(`${value.employee.name} out · ${hours} h`);
+      } else {
+        let coords: { latitude: number; longitude: number } | null = null;
+        if (gps) {
+          const perm = await Location.requestForegroundPermissionsAsync();
+          if (perm.granted) coords = (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null))?.coords || null;
+        }
+        await api.punchIn({ employeeId: value.employee.id, status: 'Present', assignedProjectId: project?.value, punchInLatitude: coords?.latitude, punchInLongitude: coords?.longitude });
+        toast(`${value.employee.name} punched in${coords ? ' with location' : ''}`);
+      }
+      haptic.success();
+      onDone();
+    } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <Sheet visible onClose={onClose} title={`${out ? 'Punch out' : 'Punch in'} · ${value.employee.name}`} footer={<Button title={out ? 'Punch out now' : 'Punch in now'} loading={busy} onPress={go} style={{ flex: 1 }} />}>
+      <View style={{ paddingHorizontal: GUTTER }}>
+        {out ? <T variant="subhead" color="secondary">In since {time(value.record.punchInTime)}.</T> : (
+          <FormSection>
+            <SelectField label="Site / project" value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" allowClear onChange={(o) => setProject(o)} placeholder="Optional" />
+            <ToggleField label="Record location" hint="Saves where the punch-in happened" value={gps} onChange={setGps} />
+          </FormSection>
+        )}
+      </View>
+    </Sheet>
+  );
+}
+

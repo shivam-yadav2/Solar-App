@@ -1,18 +1,56 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { api } from '../../src/lib/api';
-import { Badge, Card, EmptyState, ErrorState, FormField, HeaderButton, Loading, OptionField, Screen, StatCard } from '../../src/components/ui';
-import { formatDate } from '../../src/lib/formatters';
-import { useAuth } from '../../src/context/AuthContext';
+import { Zap } from 'lucide-react-native';
+import { discom } from '../../src/lib/apis/ops';
+import { useApi } from '../../src/lib/query';
+import { timeAgo } from '../../src/lib/formatters';
+import { Badge, EmptyState, ErrorState, GroupedItem, IconTile, ListScreen, ListSkeleton, Progress, space, T, Tap, useTheme, radius, elevation } from '../../src/ds';
 
+/** Net-metering and subsidy approvals across projects; blocked ones first. */
 export default function DiscomScreen() {
-  const router = useRouter(); const { hasPermission } = useAuth(); const [projects, setProjects] = useState<any[]>([]); const [projectId, setProjectId] = useState(''); const [stages, setStages] = useState<any[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [expanded, setExpanded] = useState<string | null>(null); const [query, setQuery] = useState('');
-  const loadStages = async (value: string) => { setProjectId(value); if (!value) return setStages([]); try { setError(''); setStages((await api.getDiscomStages(value)).stages); } catch (e: any) { setError(e.message); } };
-  useEffect(() => { api.getProjects({ limit: '100' }).then(async result => { setProjects(result.projects); if (result.projects[0]) await loadStages(result.projects[0].id); }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []);
-  const update = (item: any, status: string) => Alert.alert('Update stage?', `${item.stageName} → ${status}`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Update', onPress: async () => { try { await api.updateDiscomStageStatus(item.id, { status, approvalDate: status === 'Approved' ? new Date().toISOString().slice(0, 10) : undefined } as any); await loadStages(projectId); } catch (e: any) { Alert.alert('Could not update stage', e.message); } } }]);
-  const visible = useMemo(() => stages.filter(item => item.stageName.toLowerCase().includes(query.toLowerCase())), [stages, query]); const approved = stages.filter(item => item.status === 'Approved').length;
-  return <Screen title="DISCOM Liaison" subtitle="Approvals, inspection, and net metering" onBack={() => router.back()} action={hasPermission('discom.manage') && projectId ? <HeaderButton label="Add stage" onPress={() => router.push({ pathname: '/discom-form', params: { projectId } })} /> : undefined}>
-    {loading ? <Loading /> : error ? <ErrorState message={error} /> : <><Card><OptionField label="Project" value={projectId} onChange={value => void loadStages(value)} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /></Card><View className="flex-row gap-3"><View className="flex-1"><StatCard label="Stages" value={String(stages.length)} /></View><View className="flex-1"><StatCard label="Approved" value={`${approved}/${stages.length || 0}`} accent="text-emerald-700" /></View></View><FormField label="Search stages" value={query} onChangeText={setQuery} placeholder="Feasibility, inspection, subsidy..." /><Card><Text className="text-xs font-extrabold uppercase tracking-wide text-slate-500">Installation liaison progress</Text><View className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><View className="h-full rounded-full bg-emerald-500" style={{ width: `${stages.length ? (approved / stages.length) * 100 : 0}%` }} /></View><Text className="mt-2 text-xs text-slate-500">{approved} of {stages.length} milestones approved</Text></Card>{visible.length === 0 ? <EmptyState message="No DISCOM stages for this project." /> : visible.map((item, index) => <Card key={item.id}><Pressable onPress={() => setExpanded(expanded === item.id ? null : item.id)}><View className="flex-row items-center gap-3"><View className={`h-8 w-8 items-center justify-center rounded-full ${item.status === 'Approved' ? 'bg-emerald-100' : 'bg-amber-100'}`}><Text className="text-xs font-extrabold text-slate-700">{index + 1}</Text></View><Text className="flex-1 text-sm font-bold text-slate-900">{item.stageName}</Text><Badge text={item.status} tone={item.status === 'Approved' ? 'green' : item.status === 'Rejected' ? 'rose' : 'amber'} /></View></Pressable>{item.applicationReferenceNo ? <Text className="mt-2 ml-11 text-xs text-slate-500">Ref: {item.applicationReferenceNo}</Text> : null}{item.submissionDate ? <Text className="mt-1 ml-11 text-xs text-slate-500">Submitted {formatDate(item.submissionDate)}</Text> : null}{expanded === item.id ? <View className="mt-3 border-t border-slate-100 pt-3"><Text className="text-xs text-slate-600">Officer: {item.discomOfficerName || 'Not assigned'}</Text><Text className="mt-1 text-xs text-slate-600">Remarks: {item.remarks || 'No remarks'}</Text>{hasPermission('discom.manage') ? <View className="mt-3 flex-row justify-end gap-4">{item.status !== 'Approved' ? <Pressable onPress={() => update(item, 'Approved')}><Text className="text-xs font-bold text-emerald-700">Approve</Text></Pressable> : null}{item.status !== 'Rejected' ? <Pressable onPress={() => update(item, 'Rejected')}><Text className="text-xs font-bold text-rose-600">Reject</Text></Pressable> : null}{item.status !== 'On Hold' ? <Pressable onPress={() => update(item, 'On Hold')}><Text className="text-xs font-bold text-amber-700">Hold</Text></Pressable> : null}</View> : null}</View> : null}</Card>)}</>}
-  </Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const q = useApi(['discom', 'overview'], discom.overview);
+  const rows = q.data?.projects || [];
+  const blocked = rows.filter((r) => r.blockedStage).length;
+  const done = rows.filter((r) => r.approved >= r.total).length;
+  return (
+    <ListScreen<(typeof rows)[number]>
+      title="DISCOM & subsidy" back large={false}
+      header={<>
+        {rows.length ? (
+          <View style={[{ backgroundColor: p.surface, borderRadius: radius.l, padding: space.l, flexDirection: 'row' }, elevation(p, 1)]}>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">In progress</T><T variant="title2" num>{rows.length - done}</T></View>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Stuck</T><T variant="title2" num color={blocked ? 'red' : 'label'}>{blocked}</T></View>
+            <View style={{ flex: 1 }}><T variant="footnote" color="secondary">Subsidy paid</T><T variant="title2" num color="green">{done}</T></View>
+          </View>
+        ) : null}
+        {q.loading ? <ListSkeleton avatar={false} /> : q.error ? <ErrorState message={q.error} onRetry={q.refresh} /> : null}
+      </>}
+      data={q.loading ? [] : rows}
+      keyExtractor={(r) => r.projectId}
+      refreshing={q.refreshing}
+      onRefresh={q.refresh}
+      ListEmptyComponent={!q.loading ? <EmptyState icon={<Zap size={44} color={p.tertiary} />} title="No projects yet" /> : null}
+      renderItem={({ item: r, index }) => (
+        <GroupedItem index={index} count={rows.length} inset={58}>
+          <Tap onPress={() => router.push({ pathname: '/project/[id]', params: { id: r.projectId, tab: 'discom' } })} scaleTo={0.985} style={{ flexDirection: 'row', gap: space.m, paddingHorizontal: space.l, paddingVertical: 12 }}>
+            <IconTile icon={<Zap size={17} color={r.blockedStage ? p.red : p.orange} />} tone={r.blockedStage ? 'red' : 'orange'} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.s }}>
+                <T variant="headline" style={{ flex: 1 }} numberOfLines={1}>{r.projectName}</T>
+                <T variant="footnote" num color="secondary">{r.approved}/{r.total}</T>
+              </View>
+              <T variant="footnote" color={r.blockedStage ? 'red' : 'secondary'} numberOfLines={2}>
+                {r.blockedStage ? `${r.blockedStatus}: ${r.blockedStage}` : r.latestStage ? `${r.latestStatus} · ${r.latestStage} · ${timeAgo(r.latestAt)}` : 'Not started'}
+              </T>
+              <Progress value={r.approved / r.total} tone={r.approved >= r.total ? 'green' : r.blockedStage ? 'red' : 'accent'} height={4} />
+            </View>
+            {!r.started ? <Badge text="New" tone="gray" /> : null}
+          </Tap>
+        </GroupedItem>
+      )}
+    />
+  );
 }

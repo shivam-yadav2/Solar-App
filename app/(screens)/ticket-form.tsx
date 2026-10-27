@@ -1,12 +1,76 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+import { useAuth } from '../../src/context/AuthContext';
+import { loadProjects, toOptions } from '../../src/lib/pickers';
+import { Button, ChoiceField, FormSection, Screen, SelectField, T, TextField, haptic, useOverlay } from '../../src/ds';
+import { PhotosField, Attached } from '../../src/components/AttachField';
+import type { ComplaintPriority } from '../../src/types';
 
-export default function TicketFormScreen() {
-  const router = useRouter(); const { projectId } = useLocalSearchParams<{ projectId?: string }>(); const [projects, setProjects] = useState<any[]>([]); const [form, setForm] = useState<any>({ projectId: projectId || '', complaintType: 'General Complaint', subject: '', description: '', priority: 'Medium' }); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
-  useEffect(() => { api.getProjects({ limit: '100' }).then(data => { setProjects(data.projects); if (projectId && data.projects.some((item: any) => item.id === projectId)) setForm((current: any) => ({ ...current, projectId })); }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, [projectId]); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const save = async () => { if (!form.projectId || !form.subject.trim() || !form.description.trim()) { Alert.alert('Missing details', 'Project, subject, and description are required.'); return; } setSaving(true); try { await api.createComplaint(form); router.back(); } catch (e: any) { Alert.alert('Could not create ticket', e.message); } finally { setSaving(false); } };
-  return <Screen title="New Service Ticket" subtitle="Report an issue for a solar project" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <Card><OptionField label="Project *" value={form.projectId} onChange={set('projectId')} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /><ChoiceField label="Issue type" value={form.complaintType} options={['Solar Panel', 'Inverter', 'Battery', 'Wiring', 'Earthing', 'Structure', 'Generation Issue', 'UPPCL/Net Metering', 'Installation', 'General Complaint', 'Other']} onChange={set('complaintType')} /><ChoiceField label="Priority" value={form.priority} options={['Low', 'Medium', 'High', 'Critical']} onChange={set('priority')} /><FormField label="Subject" value={form.subject} onChangeText={set('subject')} required /><FormField label="Description" value={form.description} onChangeText={set('description')} multiline required /><PrimaryButton label={saving ? 'Saving…' : 'Create Ticket'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+const TYPES = ['Low generation', 'Inverter error', 'Panel damage / cleaning', 'Wiring / earthing', 'Net meter / DISCOM', 'Billing / payment', 'Other'];
+
+export default function TicketForm() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ projectId?: string }>();
+  const { user } = useAuth();
+  const { toast } = useOverlay();
+  const isCustomer = user?.role === 'CUSTOMER';
+  const settings = useQuery({ queryKey: ['settings'], queryFn: api.getSettings, enabled: !isCustomer, staleTime: 10 * 60_000 });
+  const mine = useQuery({ queryKey: ['projects', 'mine'], queryFn: () => api.getProjects({ limit: '50' }), enabled: isCustomer });
+  const [project, setProject] = useState<{ value: string; label: string } | null>(params.projectId ? { value: params.projectId, label: '' } : null);
+  const [type, setType] = useState('');
+  const [subject, setSubject] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState<ComplaintPriority>('Medium');
+  const [photos, setPhotos] = useState<Attached[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (params.projectId) api.getProject(params.projectId).then((r) => setProject({ value: r.project.id, label: r.project.projectName })).catch(() => {});
+  }, [params.projectId]);
+  useEffect(() => {
+    const list = mine.data?.projects || [];
+    if (isCustomer && !project && list.length === 1) setProject({ value: list[0].id, label: list[0].projectName });
+  }, [mine.data, isCustomer, project]);
+
+  const types = toOptions(settings.data?.settings?.complaintCategories, TYPES);
+  const save = async () => {
+    if (!project) { toast('Choose the system / project', 'error'); haptic.error(); return; }
+    if (!type) { toast('Choose what the problem is about', 'error'); haptic.error(); return; }
+    if (!description.trim()) { toast('Describe the problem', 'error'); haptic.error(); return; }
+    setSaving(true);
+    try {
+      const r: any = await api.createComplaint({
+        projectId: project.value, complaintType: type, subject: subject.trim() || type, description: description.trim(), priority,
+        attachments: photos.map((a) => ({ id: a.fileId, fileId: a.fileId, fileName: a.fileName, mimeType: a.mimeType || 'image/jpeg', fileSize: 0 })) as any,
+      });
+      haptic.success();
+      toast(isCustomer ? 'Request sent — we will get back to you soon' : 'Ticket created');
+      const newId = r.complaint?.id;
+      if (newId) router.replace({ pathname: '/ticket/[id]', params: { id: newId } }); else router.back();
+    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+  const myOptions = (mine.data?.projects || []).map((x: any) => ({ value: x.id, label: x.projectName, subtitle: `${x.capacityKw} kW` }));
+
+  return (
+    <Screen title={isCustomer ? 'Get help' : 'New ticket'} large={false} back backLabel="Cancel" right={<Button title="Send" size="s" loading={saving} onPress={save} />}>
+      <FormSection>
+        {isCustomer ? (
+          myOptions.length > 1 ? <SelectField label="Your system" value={project?.value} display={project?.label} options={myOptions} onChange={(o) => setProject(o)} required /> : null
+        ) : <SelectField label="Project" value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" onChange={(o) => setProject(o)} required />}
+        <SelectField label="Problem" value={type} options={types} onChange={(o) => o && setType(o.value)} required />
+      </FormSection>
+      <FormSection header="Details">
+        <TextField label="Short title" value={subject} onChange={setSubject} placeholder="Optional" />
+        <TextField label="What's happening?" value={description} onChange={setDescription} multiline required placeholder={isCustomer ? 'e.g. Inverter shows error E02 since yesterday' : ''} />
+        <ChoiceField<ComplaintPriority> label="How urgent" value={priority} onChange={setPriority} options={[{ value: 'Low', label: 'Low' }, { value: 'Medium', label: 'Normal' }, { value: 'High', label: 'High' }, { value: 'Critical', label: 'Critical' }]} />
+      </FormSection>
+      <FormSection footer="A photo of the inverter screen or the problem helps the technician come prepared.">
+        <PhotosField label="Photos" value={photos} onChange={setPhotos} max={4} />
+      </FormSection>
+      <Button title={isCustomer ? 'Send request' : 'Create ticket'} loading={saving} onPress={save} full />
+      {isCustomer ? <T variant="footnote" color="secondary" align="center">You'll get replies here and in your notifications.</T> : null}
+    </Screen>
+  );
 }

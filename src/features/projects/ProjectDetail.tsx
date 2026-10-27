@@ -19,7 +19,7 @@ import type { BoQStatus, DiscomLiaisonStage, DiscomStageStatus, ProjectBoqItem, 
 type View_ = 'overview' | 'money' | 'site' | 'discom' | 'files';
 type P = SolarProject & { totalReceived?: number; pendingBalance?: number; totalCost?: number; actualProfit?: number; profitMargin?: number; paymentStatus?: string; customerName?: string };
 
-export function ProjectDetail({ id }: { id: string }) {
+export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: string }) {
   const router = useRouter();
   const p = useTheme();
   const { user, hasPermission: can } = useAuth();
@@ -27,7 +27,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const { actions, toast } = useOverlay();
   const isCustomer = user?.role === 'CUSTOMER';
   const q = useApi(['projects', 'detail', id], () => api.getProject(id));
-  const [tab, setTab] = useState<View_>('overview');
+  const [tab, setTab] = useState<View_>((['overview', 'money', 'site', 'discom', 'files'].includes(initialTab || '') ? initialTab : 'overview') as View_);
   const [stageSheet, setStageSheet] = useState(false);
   const x: P | undefined = q.data?.project;
   const go = (pathname: string, params?: Record<string, string>) => router.push({ pathname: pathname as never, params });
@@ -333,7 +333,7 @@ function Files({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
   return (
     <>
       <Section header={`Documents · ${docs.length}`}>
-        {docs.map((d) => <Row key={d.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={d.title || d.fileName} subtitle={[d.category, formatDate(d.createdAt)].filter(Boolean).join(' · ')} onPress={() => void open(d.fileId)} />)}
+        {docs.map((d) => <Row key={d.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={d.name || d.fileName} subtitle={[d.category, formatDate(d.createdAt)].filter(Boolean).join(' · ')} onPress={() => void open(d.fileId)} />)}
         {can('documents.create') && !isCustomer ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Upload document or photo" action chevron={false} onPress={() => router.push({ pathname: '/document-form', params: { projectId: x.id, customerId: x.customerId } })} /> : null}
         {!docs.length && (isCustomer || !can('documents.create')) ? <Row title="No documents yet" /> : null}
       </Section>

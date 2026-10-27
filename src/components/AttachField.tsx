@@ -62,3 +62,57 @@ export const AttachField: React.FC<{ label: string; value: Attached | null; onCh
     </View>
   );
 };
+
+/** Several site photos (camera or gallery), each uploaded as it is added. */
+export const PhotosField: React.FC<{ label: string; value: Attached[]; onChange: (v: Attached[]) => void; max?: number }> = ({ label, value, onChange, max = 8 }) => {
+  const p = useTheme();
+  const { actions, toast } = useOverlay();
+  const [busy, setBusy] = useState(0);
+  const add = async (assets: { uri: string; fileName?: string | null; mimeType?: string | null }[]) => {
+    const room = max - value.length;
+    const list = assets.slice(0, room);
+    setBusy(list.length);
+    const added: Attached[] = [];
+    for (const a of list) {
+      try {
+        const r = await api.uploadFile({ uri: a.uri, name: a.fileName || `site-${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg' });
+        added.push({ fileId: r.fileId, fileName: r.fileName, uri: a.uri, mimeType: 'image/jpeg' });
+      } catch (e: any) { toast(e.message || 'A photo did not upload', 'error'); }
+      setBusy((n) => n - 1);
+    }
+    onChange([...value, ...added]);
+  };
+  const choose = () => actions({ title: label, items: [
+    { label: 'Take photo', icon: <Camera size={20} color={p.accentText} />, onPress: async () => {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { toast('Allow camera access in Settings.', 'error'); return; }
+      const r = await ImagePicker.launchCameraAsync({ quality: 0.5, mediaTypes: ['images'] });
+      if (!r.canceled) await add(r.assets);
+    } },
+    { label: 'Choose from photos', icon: <Paperclip size={20} color={p.accentText} />, onPress: async () => {
+      const r = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: Math.max(1, max - value.length) });
+      if (!r.canceled) await add(r.assets);
+    } },
+  ] });
+  return (
+    <View style={{ paddingHorizontal: space.l, paddingVertical: 10, gap: 8 }}>
+      <T variant="footnote" color="secondary">{label} · {value.length}/{max}</T>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {value.map((a) => (
+          <View key={a.fileId}>
+            <Image source={{ uri: a.uri }} style={{ width: 72, height: 72, borderRadius: radius.s, backgroundColor: p.fill }} />
+            <Tap onPress={() => onChange(value.filter((x) => x.fileId !== a.fileId))} hitSlop={8} style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: p.label, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Remove photo">
+              <X size={13} color={p.bg} strokeWidth={3} />
+            </Tap>
+          </View>
+        ))}
+        {busy > 0 ? <View style={{ width: 72, height: 72, borderRadius: radius.s, backgroundColor: p.fill, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={p.accent} /></View> : null}
+        {value.length < max && !busy ? (
+          <Tap onPress={choose} style={{ width: 72, height: 72, borderRadius: radius.s, borderWidth: 1.5, borderStyle: 'dashed', borderColor: p.tertiary, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Add photo">
+            <Camera size={22} color={p.accentText} />
+          </Tap>
+        ) : null}
+      </View>
+    </View>
+  );
+};

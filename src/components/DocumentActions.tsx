@@ -8,7 +8,7 @@ import { documentHtml, DocKind, makePdf, sharePdf } from '../lib/docs';
 import { Button, FormSection, GUTTER, Sheet, Spinner, space, T, TextField, ToggleField, useOverlay, useTheme } from '../ds';
 
 /** "Share PDF" + "Send to customer" for an invoice, receipt or warranty. */
-export const DocumentActions: React.FC<{ kind: DocKind; id: string; data: any; fileName: string }> = ({ kind, id, data, fileName }) => {
+export const DocumentActions: React.FC<{ kind: DocKind; id: string; data: any; fileName: string; html?: () => string }> = ({ kind, id, data, fileName, html }) => {
   const p = useTheme();
   const { tenant, user } = useAuth();
   const { toast } = useOverlay();
@@ -17,7 +17,7 @@ export const DocumentActions: React.FC<{ kind: DocKind; id: string; data: any; f
   const share = async () => {
     setBusy(true);
     try {
-      await sharePdf(documentHtml(kind, data, tenant), fileName);
+      await sharePdf(html ? html() : documentHtml(kind, data, tenant), fileName);
       void ops.track(kind === 'invoice' ? 'INVOICE_PRINTED' : kind === 'receipt' ? 'RECEIPT_PRINTED' : 'WARRANTY_CERTIFICATE_PRINTED', kind === 'invoice' ? 'Invoice' : kind === 'receipt' ? 'Payment' : 'WarrantyDocument', id, data.invoiceNumber || data.customId);
     } catch (e: any) { toast(e.message || 'Could not make the PDF', 'error'); } finally { setBusy(false); }
   };
@@ -25,12 +25,12 @@ export const DocumentActions: React.FC<{ kind: DocKind; id: string; data: any; f
     <View style={{ flexDirection: 'row', gap: space.s }}>
       <Button title="Share PDF" kind="gray" icon={<Share2 size={18} color={p.label} />} loading={busy} onPress={share} style={{ flex: 1 }} />
       {user?.role !== 'CUSTOMER' ? <Button title="Send" icon={<Send size={18} color={p.onAccent} />} onPress={() => setSend(true)} style={{ flex: 1 }} /> : null}
-      <SendSheet visible={send} onClose={() => setSend(false)} kind={kind} id={id} data={data} fileName={fileName} />
+      <SendSheet visible={send} onClose={() => setSend(false)} kind={kind} id={id} data={data} fileName={fileName} html={html} />
     </View>
   );
 };
 
-function SendSheet({ visible, onClose, kind, id, data, fileName }: { visible: boolean; onClose: () => void; kind: DocKind; id: string; data: any; fileName: string }) {
+function SendSheet({ visible, onClose, kind, id, data, fileName, html }: { visible: boolean; onClose: () => void; kind: DocKind; id: string; data: any; fileName: string; html?: () => string }) {
   const { tenant } = useAuth();
   const { toast } = useOverlay();
   const pre = useQuery({ queryKey: ['send-preview', kind, id], queryFn: () => ops.sendPreview(kind, id), enabled: visible });
@@ -48,7 +48,7 @@ function SendSheet({ visible, onClose, kind, id, data, fileName }: { visible: bo
     if (!channels.length) { toast('Choose email or WhatsApp', 'error'); return; }
     setBusy(true);
     try {
-      const pdf = await makePdf(documentHtml(kind, data, tenant)).catch(() => null);
+      const pdf = await makePdf(html ? html() : documentHtml(kind, data, tenant)).catch(() => null);
       const r = await ops.sendDocument({ kind, id, channels, email: email || undefined, phone: phone || undefined, pdfBase64: pdf?.base64, fileName });
       onClose();
       toast(r.sent.length ? `Sent by ${r.sent.join(' and ')}` : r.failed.map((f) => f.error).join('; ') || 'Not sent', r.sent.length ? 'success' : 'error');

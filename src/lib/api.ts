@@ -368,7 +368,7 @@ export const api = {
   createLeadFollowUp: (id: string, data: Partial<LeadFollowUp>) => request<{ followUp: LeadFollowUp }>(`/leads/${id}/follow-ups`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ---- Quotations ----
-  getQuotations: () => request<{ quotations: Quotation[]; total: number }>('/quotations'),
+  getQuotations: (params: Record<string, string> = {}) => request<{ quotations: Quotation[]; total: number; page?: number; totalPages?: number }>(`/quotations${qs(params)}`),
   createQuotation: (data: Partial<Quotation>) => request<{ quotation: Quotation }>('/quotations', { method: 'POST', body: JSON.stringify(data) }),
   updateQuotationStatus: (id: string, status: Quotation['status']) => request<{ quotation: Quotation }>(`/quotations/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   deleteQuotation: (id: string) => request<{ success: boolean }>(`/quotations/${id}`, { method: 'DELETE' }),

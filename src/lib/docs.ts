@@ -8,7 +8,7 @@ import type { Tenant } from '../types';
 // Printable invoice / receipt / warranty certificate — the same layout as the
 // web's PrintableDocumentModal, rendered to PDF on the phone with expo-print.
 
-export type DocKind = 'invoice' | 'receipt' | 'warranty';
+export type DocKind = 'invoice' | 'receipt' | 'warranty' | 'quotation';
 
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const money = (n: unknown) => esc(formatINR(Number(n) || 0));
@@ -145,4 +145,22 @@ export async function sharePdf(html: string, fileName: string): Promise<void> {
   if (Platform.OS === 'web') { await Print.printAsync({ html }); return; }
   const { uri } = await makePdf(html);
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: fileName });
+}
+
+/** Quotation PDF: the web's QuotationDocument (same four templates), rendered to static HTML. */
+export function quotationHtml(q: any, tenant: Tenant | null, settings: any): string {
+  // Loaded lazily so the DOM renderer only enters memory when a quotation PDF is made.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const React = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { renderToStaticMarkup } = require('react-dom/server.browser');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { QuotationDocument } = require('./quotationDocument');
+  const data = {
+    quotationNumber: q.quotationNumber, quotationDate: q.quotationDate, validUntil: q.validUntil, recipientName: q.recipientName, recipientAddress: q.recipientAddress,
+    recipientPhone: q.recipientPhone, title: q.title, systemCapacityKw: q.systemCapacityKw, features: q.features || [], components: q.components || [], totalAmount: Number(q.totalAmount) || 0,
+    priceLabel: q.priceLabel, paymentTerms: q.paymentTerms, termsConditions: q.termsConditions, notes: q.notes, preparedByName: q.preparedByName, preparedByPhone: q.preparedByPhone,
+  };
+  const markup = renderToStaticMarkup(React.createElement(QuotationDocument, { data, tenant, settings, template: q.templateKey || settings?.defaultTemplate || 'classic' }));
+  return `<!doctype html><html><head><meta charset="utf-8"/><style>@page{size:A4;margin:0}html,body{margin:0;padding:0}body{zoom:0.7494}</style></head><body>${markup.replace(/src="(\/api\/public\/logos\/[^"]+)"/g, (_: string, u: string) => `src="${absoluteUrl(u)}"`)}</body></html>`;
 }

@@ -18,7 +18,7 @@ const LARGE = 52;
 const Chrome: React.FC<{ style?: StyleProp<ViewStyle> }> = ({ style }) => {
   const p = useTheme();
   if (Platform.OS === 'ios') return <BlurView tint={p.dark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'} intensity={100} style={[StyleSheet.absoluteFill, style]} />;
-  return <View style={[StyleSheet.absoluteFill, { backgroundColor: p.dark ? 'rgba(18,18,20,0.97)' : 'rgba(248,248,250,0.97)' }, style]} />;
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor: p.dark ? '#121214' : '#F8F8FA' }, style]} />;
 };
 
 export interface HeaderProps {

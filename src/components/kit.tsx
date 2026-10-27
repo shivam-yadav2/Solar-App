@@ -139,4 +139,3 @@ export const SectionTitle: React.FC<{ title: string; action?: { label: string; o
   </View>
 );
 
-export const PADDING = GUTTER;

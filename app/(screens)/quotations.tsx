@@ -1,15 +1,51 @@
-import React from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { FileText, Plus } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, Screen } from '../../src/components/ui';
-import { formatDate, formatINR } from '../../src/lib/formatters';
+import { usePaged, toPage } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
+import { formatDate, formatINR } from '../../src/lib/formatters';
+import { Badge, Chips, EmptyState, ErrorState, GroupedItem, IconButton, IconTile, ListScreen, ListSkeleton, Row, SearchBar, T, useTheme } from '../../src/ds';
+import { LoadMoreFooter } from '../../src/components/kit';
+import type { Quotation } from '../../src/types';
 
 export default function QuotationsScreen() {
-  const router = useRouter(); const { hasPermission } = useAuth(); const state = useFetch(() => api.getQuotations()); const items = state.data?.quotations ?? [];
-  const status = async (id: string, value: any) => { try { await api.updateQuotationStatus(id, value); await state.reload(); } catch (e: any) { Alert.alert('Could not update quotation', e.message); } };
-  const remove = (item: any) => Alert.alert('Delete quotation?', item.quotationNumber, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api.deleteQuotation(item.id); await state.reload(); } catch (e: any) { Alert.alert('Could not delete quotation', e.message); } } }]);
-  return <Screen title="Quotations" subtitle="Solar proposals and acceptance" onBack={() => router.back()} action={hasPermission('quotations.manage') ? <HeaderButton onPress={() => router.push('/quotation-form')} /> : undefined} refreshing={state.isRefreshing} onRefresh={state.refresh}>{state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : items.length === 0 ? <EmptyState message="No quotations yet." /> : items.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.title}</Text><Text className="mt-1 text-xs text-slate-500">{item.quotationNumber} · Valid {formatDate(item.validUntil)}</Text></View><Badge text={item.status} tone={item.status === 'Accepted' ? 'green' : item.status === 'Rejected' || item.status === 'Expired' ? 'rose' : 'amber'} /></View><Text className="mt-3 text-xl font-bold text-emerald-700">{formatINR(item.totalAmount)}</Text><Text className="mt-1 text-xs text-slate-500">{item.systemCapacityKw} kW · {item.items?.length ?? 0} line items</Text>{hasPermission('quotations.manage') ? <View className="mt-3 flex-row flex-wrap gap-3"><Pressable onPress={() => void status(item.id, 'Sent')}><Text className="text-xs font-semibold text-blue-700">Mark Sent</Text></Pressable><Pressable onPress={() => void status(item.id, 'Accepted')}><Text className="text-xs font-semibold text-emerald-700">Accept</Text></Pressable><Pressable onPress={() => remove(item)}><Text className="text-xs font-semibold text-rose-600">Delete</Text></Pressable></View> : null}</Card>)}</Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const { hasPermission: can } = useAuth();
+  const [text, setText] = useState('');
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
+  const list = usePaged<Quotation>(['quotations', 'list', q, status], async (page, limit) => {
+    const r: any = await api.getQuotations({ page: String(page), limit: String(limit), q, status });
+    return toPage(r.quotations, r, page);
+  });
+  return (
+    <ListScreen<Quotation>
+      title="Quotations" back large={false}
+      right={can('quotations.manage') ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New quotation" onPress={() => router.push('/quotation-form')} /> : undefined}
+      header={<>
+        <SearchBar value={text} onChange={setText} onSearch={setQ} placeholder="Customer, phone or quotation no." />
+        <Chips value={status} onChange={setStatus} options={['all', 'Draft', 'Sent', 'Viewed', 'Accepted', 'Rejected', 'Expired'].map((s) => ({ value: s, label: s === 'all' ? 'All' : s }))} />
+        {list.loading ? <ListSkeleton avatar={false} /> : list.error ? <ErrorState message={list.error} onRetry={list.refresh} /> : null}
+      </>}
+      data={list.loading || list.error ? [] : list.items}
+      keyExtractor={(x) => x.id}
+      refreshing={list.refreshing}
+      onRefresh={list.refresh}
+      onEndReached={list.loadMore}
+      ListEmptyComponent={!list.loading && !list.error ? <EmptyState icon={<FileText size={44} color={p.tertiary} />} title="No quotations" message="Make a quotation from a lead or here, and share the PDF on WhatsApp." action={can('quotations.manage') && !q ? { title: 'New quotation', onPress: () => router.push('/quotation-form') } : undefined} /> : null}
+      ListFooterComponent={<LoadMoreFooter loading={list.loadingMore} hasMore={list.hasMore} count={list.items.length} total={list.total} noun="quotations" />}
+      renderItem={({ item: x, index }) => (
+        <GroupedItem index={index} count={list.items.length} inset={58}>
+          <Row icon={<IconTile icon={<FileText size={17} color={p.blue} />} tone="blue" />}
+            title={x.recipientName || x.title}
+            subtitle={`${x.quotationNumber} · ${x.systemCapacityKw || '–'} kW · ${formatDate(x.quotationDate || x.createdAt)}`}
+            accessory={<View style={{ alignItems: 'flex-end', gap: 3 }}><T variant="subhead" num weight="600">{formatINR(x.totalAmount)}</T><Badge text={x.status} /></View>}
+            onPress={() => router.push({ pathname: '/quotation/[id]', params: { id: x.id } })} />
+        </GroupedItem>
+      )}
+    />
+  );
 }

@@ -1,24 +1,52 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Plus, Wrench } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { formatDate } from '../../src/lib/formatters';
-import { Badge, Card, EmptyState, ErrorState, FormField, HeaderButton, Loading, Screen, StatCard } from '../../src/components/ui';
-import type { Complaint } from '../../src/types';
+import { usePaged, toPage } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
+import { timeAgo } from '../../src/lib/formatters';
+import { Badge, Chips, EmptyState, ErrorState, GroupedItem, IconButton, IconTile, ListScreen, ListSkeleton, Row, SearchBar, useTheme } from '../../src/ds';
+import { LoadMoreFooter } from '../../src/components/kit';
 
 export default function TicketsScreen() {
-  const router = useRouter(); const state = useFetch(() => api.getComplaints({ limit: '100' })); const items: Complaint[] = state.data?.complaints ?? []; const [query, setQuery] = useState(''); const [status, setStatus] = useState('All'); const [priority, setPriority] = useState('All');
-  const { user, hasPermission } = useAuth();
-  const filtered = useMemo(() => items.filter(item => `${item.subject} ${item.customId} ${item.description}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All' || item.status === status) && (priority === 'All' || item.priority === priority)), [items, query, status, priority]);
-  return <Screen title="Service Tickets" subtitle="Customer complaints and resolutions" onBack={() => router.back()} action={user?.role === 'CUSTOMER' || hasPermission('complaints.create') ? <HeaderButton onPress={() => router.push('/ticket-form')} /> : undefined} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <>
-      <StatCard label="Open Tickets" value={String(state.data?.summary?.openTicketsCount ?? items.filter(i => !/resolved|closed/i.test(i.status)).length)} hint={`${items.length} total`} accent="text-rose-600" /><FormField label="Search tickets" value={query} onChangeText={setQuery} placeholder="Subject, ticket ID or description" /><View className="mt-2 flex-row flex-wrap gap-2">{['All', 'Submitted', 'Acknowledged', 'Assigned', 'In Progress', 'Resolved', 'Closed'].map(item => <Pressable key={item} onPress={() => setStatus(item)} className={`rounded-full border px-3 py-1.5 ${status === item ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}><Text className={`text-[11px] font-bold ${status === item ? 'text-blue-700' : 'text-slate-500'}`}>{item}</Text></Pressable>)}</View><View className="mt-2 flex-row gap-2">{['All', 'Low', 'Medium', 'High', 'Critical'].map(item => <Pressable key={item} onPress={() => setPriority(item)} className={`rounded-full border px-3 py-1.5 ${priority === item ? 'border-rose-500 bg-rose-50' : 'border-slate-200'}`}><Text className={`text-[11px] font-bold ${priority === item ? 'text-rose-700' : 'text-slate-500'}`}>{item}</Text></Pressable>)}</View>
-      {filtered.length === 0 ? <EmptyState message="No service tickets match this filter." /> : filtered.map((item) => <Pressable key={item.id} onPress={() => router.push({ pathname: '/ticket/[id]', params: { id: item.id } })}><Card>
-        <View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.subject}</Text><Text className="text-[10px] font-mono text-slate-400 mt-1">{item.customId} · {formatDate(item.createdAt)}</Text></View><Badge text={item.priority} tone={item.priority === 'Critical' || item.priority === 'High' ? 'rose' : 'amber'} /></View>
-        <Text className="text-xs text-slate-500 mt-2" numberOfLines={2}>{item.description}</Text><View className="mt-3"><Badge text={item.status} tone={/resolved|closed/i.test(item.status) ? 'green' : 'slate'} /></View>
-      </Card></Pressable>)}
-    </>}
-  </Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const { user, hasPermission: can } = useAuth();
+  const isCustomer = user?.role === 'CUSTOMER';
+  const [text, setText] = useState('');
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('open');
+  const list = usePaged<any>(['complaints', 'list', q, status], async (page, limit) => {
+    const r: any = await api.getComplaints({ page: String(page), limit: String(limit), q, status });
+    return toPage(r.complaints, r, page);
+  });
+  const canCreate = isCustomer || can('complaints.create');
+  return (
+    <ListScreen<any>
+      title={isCustomer ? 'Service requests' : 'Service tickets'} back large={false}
+      right={canCreate ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New ticket" onPress={() => router.push('/ticket-form')} /> : undefined}
+      header={<>
+        {!isCustomer ? <SearchBar value={text} onChange={setText} onSearch={setQ} placeholder="Ticket no., issue or technician" /> : null}
+        <Chips value={status} onChange={setStatus} options={[{ value: 'open', label: 'Open' }, { value: 'done', label: 'Resolved' }, { value: 'all', label: 'All' }]} />
+        {list.loading ? <ListSkeleton avatar={false} /> : list.error ? <ErrorState message={list.error} onRetry={list.refresh} /> : null}
+      </>}
+      data={list.loading || list.error ? [] : list.items}
+      keyExtractor={(x) => x.id}
+      refreshing={list.refreshing}
+      onRefresh={list.refresh}
+      onEndReached={list.loadMore}
+      ListEmptyComponent={!list.loading && !list.error ? <EmptyState icon={<Wrench size={44} color={p.tertiary} />} title={status === 'open' ? 'No open tickets' : 'No tickets'} message={isCustomer ? 'If something is wrong with your system, tell us here.' : undefined} action={canCreate && status === 'open' ? { title: isCustomer ? 'Get help' : 'New ticket', onPress: () => router.push('/ticket-form') } : undefined} /> : null}
+      ListFooterComponent={<LoadMoreFooter loading={list.loadingMore} hasMore={list.hasMore} count={list.items.length} total={list.total} noun="tickets" />}
+      renderItem={({ item: x, index }) => (
+        <GroupedItem index={index} count={list.items.length} inset={58}>
+          <Row icon={<IconTile icon={<Wrench size={17} color={x.priority === 'High' || x.priority === 'Critical' ? p.red : p.orange} />} tone={x.priority === 'High' || x.priority === 'Critical' ? 'red' : 'orange'} />}
+            title={x.subject}
+            subtitle={[x.customId, isCustomer ? x.projectName : x.customerName, x.complaintType, x.assignedStaff ? `→ ${x.assignedStaff}` : null, timeAgo(x.updatedAt || x.createdAt)].filter(Boolean).join(' · ')}
+            accessory={<View style={{ alignItems: 'flex-end', gap: 3 }}><Badge text={x.status} />{!isCustomer && (x.priority === 'High' || x.priority === 'Critical') ? <Badge text={x.priority} tone="red" /> : null}</View>}
+            onPress={() => router.push({ pathname: '/ticket/[id]', params: { id: x.id } })} />
+        </GroupedItem>
+      )}
+    />
+  );
 }
