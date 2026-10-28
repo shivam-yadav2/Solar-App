@@ -3,7 +3,7 @@
     "name": "SolarOS",
     "slug": "solaros-mobile",
     "scheme": "solaros",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/branding/brand-app-icon-v3.png",
     "userInterfaceStyle": "automatic",
@@ -11,12 +11,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.solaros.mobile",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "icon": "./assets/branding/brand-app-icon-v3.png"
     },
     "android": {
       "package": "com.solaros.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#071426",
@@ -43,11 +43,11 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#071426",
+          "backgroundColor": "#F2F2F7",
           "image": "./assets/branding/brand-adaptive-foreground-v3.png",
-          "imageWidth": 200,
+          "imageWidth": 120,
           "dark": {
-            "backgroundColor": "#071426",
+            "backgroundColor": "#000000",
             "image": "./assets/branding/brand-adaptive-foreground-v3.png"
           }
         }

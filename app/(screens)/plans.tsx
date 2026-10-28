@@ -1,20 +1,43 @@
 import React from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Plus, Wallet } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
+import { useApi } from '../../src/lib/query';
 import { formatINR } from '../../src/lib/formatters';
-import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, Screen } from '../../src/components/ui';
+import { Badge, EmptyState, ErrorState, GroupedItem, IconButton, ListScreen, ListSkeleton, Row, T, useOverlay, useTheme } from '../../src/ds';
+import type { Plan } from '../../src/types';
 
 export default function PlansScreen() {
-  const router = useRouter(); const state = useFetch(() => api.getPlans()); const items = state.data?.plans ?? [];
-  const remove = (item: any) => Alert.alert('Delete plan?', item.name, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api.deletePlan(item.id); await state.reload(); } catch (e: any) { Alert.alert('Could not delete plan', e.message); } } }]);
-  return <Screen title="Plans" subtitle="Subscription catalog and tenant limits" onBack={() => router.back()} action={<HeaderButton onPress={() => router.push('/plan-form')} />} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : items.length === 0 ? <EmptyState message="No subscription plans configured." /> : items.map(item => <Card key={item.id}>
-      <Pressable onPress={() => router.push({ pathname: '/plan-form', params: { id: item.id } })}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-base font-bold text-slate-900">{item.name}</Text><Text className="text-xs text-slate-500 mt-1">{item.description || item.key}</Text></View><Badge text={item.isActive ? 'Active' : 'Inactive'} tone={item.isActive ? 'green' : 'slate'} /></View>
-      <Text className="text-2xl font-bold text-emerald-700 mt-3">{formatINR(item.pricePerMonth)}<Text className="text-xs font-normal text-slate-400"> / {item.billingCycle}</Text></Text>
-      <Text className="text-xs text-slate-600 mt-3">{item.maxProjectsLimit} projects · {item.maxUsersLimit} users · {item.trialDays} trial days</Text><Text className="text-[10px] text-slate-400 mt-1">{item.tenantCount ?? 0} tenants assigned</Text></Pressable>
-      {!(item.tenantCount ?? 0) ? <Pressable onPress={() => remove(item)} className="mt-3 self-end"><Text className="text-xs font-semibold text-rose-600">Delete</Text></Pressable> : null}
-    </Card>)}
-  </Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const { actions, toast } = useOverlay();
+  const q = useApi(['plans', 'all'], api.getPlans);
+  const items: (Plan & { tenantCount?: number })[] = q.data?.plans || [];
+  const remove = (x: Plan) => {
+    const run = async () => { try { await api.deletePlan(x.id); toast('Plan deleted'); void q.refresh(); } catch (e: any) { toast(e.message, 'error'); } };
+    if (Platform.OS === 'web') return void run();
+    Alert.alert(`Delete ${x.name}?`, 'Companies on this plan keep their current limits.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void run() }]);
+  };
+  return (
+    <ListScreen<Plan & { tenantCount?: number }>
+      title="Plans" back large={false}
+      right={<IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New plan" onPress={() => router.push('/plan-form')} />}
+      header={q.loading ? <ListSkeleton avatar={false} /> : q.error ? <ErrorState message={q.error} onRetry={q.refresh} /> : null}
+      data={q.loading || q.error ? [] : items}
+      keyExtractor={(x) => x.id}
+      refreshing={q.refreshing}
+      onRefresh={q.refresh}
+      ListEmptyComponent={!q.loading ? <EmptyState icon={<Wallet size={44} color={p.tertiary} />} title="No plans" action={{ title: 'New plan', onPress: () => router.push('/plan-form') }} /> : null}
+      renderItem={({ item: x, index }) => (
+        <GroupedItem index={index} count={items.length}>
+          <Row title={x.name}
+            subtitle={`${x.maxProjectsLimit} projects · ${x.maxUsersLimit} users · ${x.trialDays} trial days · ${x.tenantCount ?? 0} companies`}
+            accessory={<View style={{ alignItems: 'flex-end', gap: 3 }}><T variant="subhead" num weight="600">{formatINR(x.pricePerMonth)}<T variant="footnote" color="secondary">/{x.billingCycle === 'yearly' ? 'yr' : 'mo'}</T></T>{!x.isActive ? <Badge text="Inactive" tone="gray" /> : null}</View>}
+            onPress={() => router.push({ pathname: '/plan-form', params: { id: x.id } })}
+            onLongPress={!(x.tenantCount ?? 0) ? () => actions({ title: x.name, items: [{ label: 'Delete plan', destructive: true, onPress: () => remove(x) }] }) : undefined} />
+        </GroupedItem>
+      )}
+    />
+  );
 }

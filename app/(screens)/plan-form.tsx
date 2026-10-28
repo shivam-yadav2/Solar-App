@@ -1,15 +1,63 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, PrimaryButton, Screen } from '../../src/components/ui';
+import { Button, ChoiceField, ErrorState, FormSection, ListSkeleton, Screen, TextField, ToggleField, haptic, num, useOverlay } from '../../src/ds';
 
-const moduleLabels: Record<string, string> = { customerManagement: 'Customers', solarProjects: 'Projects', paymentsMilestones: 'Payments', expenseTracking: 'Expenses', profitAndMargins: 'Profit & Margins', payroll: 'Payroll', warrantyCards: 'Warranties', invoices: 'Invoices', serviceTickets: 'Service Tickets', documentCenter: 'Documents', reportsExport: 'Reports', activityLogs: 'Audit Logs', aiAssistant: 'AI Assistant' };
-const defaultModules = Object.fromEntries(Object.keys(moduleLabels).map(key => [key, true]));
-export default function PlanFormScreen() {
-  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const [form, setForm] = useState<any>({ key: '', name: '', description: '', pricePerMonth: '', billingCycle: 'monthly', maxProjectsLimit: '25', maxUsersLimit: '5', trialDays: '14', isActive: 'Yes', sortOrder: '0', enabledModules: defaultModules }); const [loading, setLoading] = useState(Boolean(id)); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
-  useEffect(() => { if (!id) return; api.getPlans().then(data => { const item = data.plans.find(value => value.id === id); if (item) setForm({ ...item, pricePerMonth: String(item.pricePerMonth), maxProjectsLimit: String(item.maxProjectsLimit), maxUsersLimit: String(item.maxUsersLimit), trialDays: String(item.trialDays), sortOrder: String(item.sortOrder), isActive: item.isActive ? 'Yes' : 'No', enabledModules: { ...defaultModules, ...item.enabledModules } }); }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, [id]); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const save = async () => { if (!form.key.trim() || !form.name.trim()) { Alert.alert('Missing details', 'Plan key and name are required.'); return; } setSaving(true); try { const payload: any = { ...form, pricePerMonth: Number(form.pricePerMonth), maxProjectsLimit: Number(form.maxProjectsLimit), maxUsersLimit: Number(form.maxUsersLimit), trialDays: Number(form.trialDays), sortOrder: Number(form.sortOrder), isActive: form.isActive === 'Yes' }; if (id) await api.updatePlan(String(id), payload); else await api.createPlan(payload); router.back(); } catch (e: any) { Alert.alert('Could not save plan', e.message); } finally { setSaving(false); } };
-  return <Screen title={id ? 'Edit Plan' : 'Create Plan'} subtitle="Pricing, limits and modules" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <><Card>{!id ? <FormField label="Plan key" value={form.key} onChangeText={set('key')} required /> : null}<FormField label="Plan name" value={form.name} onChangeText={set('name')} required /><FormField label="Description" value={form.description || ''} onChangeText={set('description')} multiline /><FormField label="Price per month" value={form.pricePerMonth} onChangeText={set('pricePerMonth')} keyboardType="numeric" /><ChoiceField label="Billing cycle" value={form.billingCycle} options={['monthly', 'yearly']} onChange={set('billingCycle')} /><FormField label="Project limit" value={form.maxProjectsLimit} onChangeText={set('maxProjectsLimit')} keyboardType="numeric" /><FormField label="User limit" value={form.maxUsersLimit} onChangeText={set('maxUsersLimit')} keyboardType="numeric" /><FormField label="Trial days" value={form.trialDays} onChangeText={set('trialDays')} keyboardType="numeric" /><ChoiceField label="Active" value={form.isActive} options={['Yes', 'No']} onChange={set('isActive')} /></Card><Card><Text className="text-xs font-bold text-slate-500 mb-3">ENABLED MODULES</Text><View className="flex-row flex-wrap gap-2">{Object.entries(moduleLabels).map(([key, label]) => { const active = Boolean(form.enabledModules[key]); return <Pressable key={key} onPress={() => setForm((current: any) => ({ ...current, enabledModules: { ...current.enabledModules, [key]: !active } }))} className={`rounded-lg border px-3 py-2 ${active ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}><Text className={`text-xs font-semibold ${active ? 'text-amber-800' : 'text-slate-400'}`}>{label}</Text></Pressable>; })}</View></Card><PrimaryButton label={saving ? 'Saving…' : id ? 'Save Plan' : 'Create Plan'} onPress={() => void save()} disabled={saving} /></>}
-  </Screen>;
+const MODULES: Record<string, string> = { customerManagement: 'Customers', solarProjects: 'Projects', paymentsMilestones: 'Payments', expenseTracking: 'Expenses', profitAndMargins: 'Profit & margins', payroll: 'Payroll', warrantyCards: 'Warranties', invoices: 'Invoices', serviceTickets: 'Service tickets', documentCenter: 'Documents', reportsExport: 'Reports', activityLogs: 'Audit log', aiAssistant: 'AI assistant' };
+const allOn = Object.fromEntries(Object.keys(MODULES).map((k) => [k, true]));
+
+export default function PlanForm() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { toast } = useOverlay();
+  const [f, setF] = useState<any>({ key: '', name: '', description: '', pricePerMonth: '', billingCycle: 'monthly', maxProjectsLimit: '25', maxUsersLimit: '5', trialDays: '14', isActive: true, sortOrder: '0', enabledModules: allOn });
+  const [loading, setLoading] = useState(!!id);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    api.getPlans().then((d) => { const x = d.plans.find((v) => v.id === id); if (x) setF({ ...x, description: x.description || '', pricePerMonth: String(x.pricePerMonth), maxProjectsLimit: String(x.maxProjectsLimit), maxUsersLimit: String(x.maxUsersLimit), trialDays: String(x.trialDays), sortOrder: String(x.sortOrder ?? 0), enabledModules: { ...allOn, ...(x.enabledModules || {}) } }); })
+      .catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [id]);
+  const set = (k: string) => (v: any) => setF((s: any) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.key.trim() || !f.name.trim()) { toast('Enter the plan key and name', 'error'); haptic.error(); return; }
+    setSaving(true);
+    try {
+      const body: any = { ...f, pricePerMonth: num(f.pricePerMonth), maxProjectsLimit: num(f.maxProjectsLimit), maxUsersLimit: num(f.maxUsersLimit), trialDays: num(f.trialDays), sortOrder: num(f.sortOrder) };
+      if (id) await api.updatePlan(id, body); else await api.createPlan(body);
+      toast(id ? 'Plan saved' : 'Plan created');
+      router.back();
+    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+  return (
+    <Screen title={id ? 'Edit plan' : 'New plan'} large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+      {error ? <ErrorState message={error} /> : loading ? <ListSkeleton rows={4} avatar={false} /> : (
+        <>
+          <FormSection header="Plan">
+            {!id ? <TextField label="Key" value={f.key} onChange={set('key')} required placeholder="e.g. growth" /> : null}
+            <TextField label="Name" value={f.name} onChange={set('name')} required />
+            <TextField label="Description" value={f.description} onChange={set('description')} multiline />
+            <ToggleField label="Available for new companies" value={!!f.isActive} onChange={set('isActive')} />
+          </FormSection>
+          <FormSection header="Price">
+            <TextField label="Price per month" kind="money" value={f.pricePerMonth} onChange={set('pricePerMonth')} />
+            <ChoiceField label="Billing" value={f.billingCycle} onChange={set('billingCycle')} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly' }]} />
+            <TextField label="Trial days" kind="number" value={f.trialDays} onChange={set('trialDays')} />
+          </FormSection>
+          <FormSection header="Limits" footer="0 means unlimited.">
+            <View style={{ flexDirection: 'row' }}>
+              <View style={{ flex: 1 }}><TextField label="Projects" kind="number" value={f.maxProjectsLimit} onChange={set('maxProjectsLimit')} /></View>
+              <View style={{ flex: 1 }}><TextField label="Staff logins" kind="number" value={f.maxUsersLimit} onChange={set('maxUsersLimit')} /></View>
+            </View>
+          </FormSection>
+          <FormSection header="Modules">
+            {Object.entries(MODULES).map(([k, label]) => <ToggleField key={k} label={label} value={!!f.enabledModules[k]} onChange={(v) => setF((s: any) => ({ ...s, enabledModules: { ...s.enabledModules, [k]: v } }))} />)}
+          </FormSection>
+          <Button title={id ? 'Save plan' : 'Create plan'} loading={saving} onPress={save} full />
+        </>
+      )}
+    </Screen>
+  );
 }

@@ -63,7 +63,7 @@ export const Badge: React.FC<{ text: string; tone?: 'green' | 'amber' | 'rose' |
   } as const;
   return (
     <View className={`px-2 py-0.5 rounded-md self-start ${tones[tone].split(' ')[0]}`}>
-      <Text className={`text-[10px] font-semibold ${tones[tone].split(' ')[1]}`}>{text}</Text>
+      <Text className={`text-[11px] font-semibold ${tones[tone].split(' ')[1]}`}>{text}</Text>
     </View>
   );
 };

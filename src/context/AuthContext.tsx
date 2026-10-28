@@ -88,16 +88,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [logout]);
 
   // Boot: server address / update check, then the saved session.
+  // Whatever fails here (storage, network, a bad response), the splash must end:
+  // a thrown step used to leave isLoading true and the app stuck on the splash.
   useEffect(() => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; setIsLoading(false); } };
+    const guard = setTimeout(finish, 12_000);
     (async () => {
-      await loadSavedApiBase();
-      await Promise.race([checkAppConfig(), new Promise((r) => setTimeout(r, 2500))]);
-      const { token } = await restoreSession();
-      setIsImpersonating(!!(await store.get(PLATFORM_TOKEN_KEY).catch(() => null)));
-      if (token) await refreshUser().catch(() => undefined);
-      setIsLoading(false);
+      try {
+        await loadSavedApiBase().catch(() => undefined);
+        await Promise.race([checkAppConfig().catch(() => undefined), new Promise((r) => setTimeout(r, 2500))]);
+        const { token } = await restoreSession();
+        setIsImpersonating(!!(await store.get(PLATFORM_TOKEN_KEY).catch(() => null)));
+        if (token) await refreshUser().catch(() => undefined);
+      } catch {
+        // fall through to the sign-in screen
+      } finally {
+        clearTimeout(guard);
+        finish();
+      }
     })();
-  }, [refreshUser]);
+    return () => clearTimeout(guard);
+    // Boot runs once; refreshUser is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => onAuthExpired(() => { void logout(); }), [logout]);
 

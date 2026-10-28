@@ -27,7 +27,7 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: p.secondary,
         tabBarStyle: { position: 'absolute', borderTopColor: p.separator, borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: Platform.OS === 'ios' ? 'transparent' : p.dark ? 'rgba(18,18,20,0.98)' : 'rgba(250,250,252,0.98)', elevation: 0, ...(Platform.OS === 'web' ? { height: 58, paddingBottom: 6 } : null) },
         tabBarBackground: () => (Platform.OS === 'ios' ? <BlurView tint={p.dark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'} intensity={100} style={StyleSheet.absoluteFill} /> : <View />),
-        tabBarLabelStyle: { fontSize: 10, lineHeight: 14, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 11, lineHeight: 14, fontWeight: '500' },
         tabBarHideOnKeyboard: true,
         sceneStyle: { backgroundColor: p.bg },
       }}
