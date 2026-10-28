@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { LayoutChangeEvent, Platform, ScrollView, Switch as RNSwitch, TextInput, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Search, X } from 'lucide-react-native';
 import { radius, space, type, useTheme } from './theme';
 const noOutline = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null;
@@ -16,7 +16,7 @@ export const SearchBar: React.FC<{ value: string; onChange: (v: string) => void;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: p.fill, borderRadius: radius.s + 2, height: 38, paddingHorizontal: 8, gap: 6 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: p.fill, borderRadius: radius.s + 2, minHeight: 44, paddingHorizontal: 10, gap: 8 }}>
       <Search size={17} color={p.secondary} />
       <TextInput
         value={value}
@@ -31,7 +31,7 @@ export const SearchBar: React.FC<{ value: string; onChange: (v: string) => void;
         style={[type.body, { flex: 1, color: p.label, paddingVertical: 0 }, noOutline]}
       />
       {value ? (
-        <Tap onPress={() => onChange('')} hitSlop={10} accessibilityLabel="Clear search">
+        <Tap onPress={() => onChange('')} accessibilityRole="button" accessibilityLabel="Clear search" style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
           <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: p.tertiary, alignItems: 'center', justifyContent: 'center' }}><X size={12} color={p.surface} strokeWidth={3} /></View>
         </Tap>
       ) : null}
@@ -42,17 +42,18 @@ export const SearchBar: React.FC<{ value: string; onChange: (v: string) => void;
 /** Segmented control with a sliding thumb. */
 export function Segmented<V extends string>({ value, options, onChange }: { value: V; options: { value: V; label: string }[]; onChange: (v: V) => void }) {
   const p = useTheme();
+  const reduceMotion = useReducedMotion();
   const [w, setW] = useState(0);
   const idx = Math.max(0, options.findIndex((o) => o.value === value));
   const x = useSharedValue(0);
   const seg = w / Math.max(1, options.length);
-  useEffect(() => { x.value = withSpring(idx * seg, { damping: 22, stiffness: 260 }); }, [idx, seg, x]);
+  useEffect(() => { x.value = reduceMotion ? idx * seg : withSpring(idx * seg, { damping: 22, stiffness: 260 }); }, [idx, seg, reduceMotion, x]);
   const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
-    <View onLayout={(e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width - 4)} style={{ flexDirection: 'row', backgroundColor: p.fill, borderRadius: radius.s + 1, padding: 2, height: 34 }}>
+    <View onLayout={(e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width - 4)} style={{ flexDirection: 'row', backgroundColor: p.fill, borderRadius: radius.s + 1, padding: 2, minHeight: 44 }}>
       {w > 0 ? <Animated.View style={[{ position: 'absolute', top: 2, left: 2, width: seg, bottom: 2, borderRadius: 7, backgroundColor: p.dark ? '#636366' : '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }, thumb]} /> : null}
       {options.map((o) => (
-        <Tap key={o.value} scaleTo={0.96} onPress={() => { if (o.value !== value) { haptic.tap(); onChange(o.value); } }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="tab" accessibilityState={{ selected: o.value === value }}>
+        <Tap key={o.value} scaleTo={0.96} onPress={() => { if (o.value !== value) { haptic.tap(); onChange(o.value); } }} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="tab" accessibilityLabel={o.label} accessibilityState={{ selected: o.value === value }}>
           <T variant="footnote" weight={o.value === value ? '600' : '500'} numberOfLines={1}>{o.label}</T>
         </Tap>
       ))}
@@ -69,7 +70,7 @@ export function Chips<V extends string>({ value, options, onChange }: { value: V
       {options.map((o) => {
         const on = o.value === value;
         return (
-          <Tap key={o.value} scaleTo={0.94} onPress={() => { haptic.tap(); onChange(o.value); }} style={{ height: 32, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: on ? p.label : p.surface, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Tap key={o.value} scaleTo={0.94} onPress={() => { haptic.tap(); onChange(o.value); }} accessibilityRole="button" accessibilityState={{ selected: on }} style={{ height: 44, paddingHorizontal: 16, borderRadius: radius.pill, backgroundColor: on ? p.label : p.surface, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <T variant="subhead" weight="500" style={{ color: on ? p.bg : p.label }}>{o.label}</T>
             {o.count !== undefined ? <T variant="caption" num style={{ color: on ? p.bg : p.secondary }}>{o.count}</T> : null}
           </Tap>

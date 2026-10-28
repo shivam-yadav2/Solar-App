@@ -1,12 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+import { loadEmployees } from '../../src/lib/pickers';
+import { Button, DateField, FormSection, ListSkeleton, Screen, SelectField, TextField, ToggleField, haptic, num, todayISO, useOverlay } from '../../src/ds';
 
 export default function SalaryAdvanceFormScreen() {
-  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const [employees, setEmployees] = useState<any[]>([]); const [form, setForm] = useState<any>({ employeeId: '', amount: '5000', disbursedDate: new Date().toISOString().slice(0, 10), reason: 'Festival / Emergency Advance', recoveryMonth: new Date().toISOString().slice(0, 7), isRecovered: 'No', notes: '' }); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
-  useEffect(() => { Promise.all([api.getEmployees({ limit: '100' }), id ? api.getSalaryAdvances({ limit: '100' }) : Promise.resolve(null)]).then(([employeeData, advanceData]) => { setEmployees(employeeData.employees); if (id) { const item = advanceData?.advances.find(value => value.id === id); if (item) setForm({ ...item, amount: String(item.amount), isRecovered: item.isRecovered ? 'Yes' : 'No' }); } }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, [id]); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const save = async () => { if (!form.employeeId || !Number(form.amount) || !form.recoveryMonth) { Alert.alert('Missing details', 'Employee, amount, and recovery month are required.'); return; } setSaving(true); try { const payload = { ...form, amount: Number(form.amount), isRecovered: form.isRecovered === 'Yes' }; if (id) await api.updateSalaryAdvance(String(id), payload); else await api.createSalaryAdvance(payload); router.back(); } catch (e: any) { Alert.alert('Could not save advance', e.message); } finally { setSaving(false); } };
-  return <Screen title={id ? 'Edit Salary Advance' : 'Grant Salary Advance'} subtitle="Schedule recovery through payroll" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <Card><OptionField label="Employee *" value={form.employeeId} onChange={set('employeeId')} options={employees.map(item => ({ value: item.id, label: `${item.name} · ${item.role}` }))} /><FormField label="Amount" value={form.amount} onChangeText={set('amount')} keyboardType="numeric" required /><FormField label="Disbursal date" value={form.disbursedDate} onChangeText={set('disbursedDate')} /><FormField label="Recovery month" value={form.recoveryMonth} onChangeText={set('recoveryMonth')} required /><FormField label="Reason" value={form.reason} onChangeText={set('reason')} required />{id ? <ChoiceField label="Recovered" value={form.isRecovered} options={['No', 'Yes']} onChange={set('isRecovered')} /> : null}<FormField label="Notes" value={form.notes || ''} onChangeText={set('notes')} multiline /><PrimaryButton label={saving ? 'Saving…' : id ? 'Update Advance' : 'Grant Advance'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const { toast } = useOverlay();
+  const [employee, setEmployee] = useState<{ value: string; label: string } | null>(null);
+  const [f, setF] = useState({ amount: '5000', disbursedDate: todayISO(), reason: 'Festival / Emergency Advance', recoveryMonth: new Date().toISOString().slice(0, 7), isRecovered: false, notes: '' });
+  const [loading, setLoading] = useState(!!id); const [saving, setSaving] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => { if (!id) return; api.getSalaryAdvances({ limit: '500' }).then((result) => { const item = result.advances.find((value) => value.id === id); if (item) { setEmployee({ value: item.employeeId, label: item.employeeName }); setF({ amount: String(item.amount), disbursedDate: item.disbursedDate.slice(0, 10), reason: item.reason, recoveryMonth: item.recoveryMonth, isRecovered: item.isRecovered, notes: item.notes || '' }); } }).catch((e) => toast(e.message, 'error')).finally(() => setLoading(false)); }, [id, toast]);
+  const save = async () => {
+    const validation: Record<string, string> = {}; if (!employee) validation.employee = 'Choose an employee.'; if (num(f.amount) <= 0) validation.amount = 'Enter the advance amount.'; if (!f.recoveryMonth.match(/^\d{4}-\d{2}$/)) validation.month = 'Use YYYY-MM.';
+    setErrors(validation); if (Object.keys(validation).length || !employee) { haptic.error(); return; }
+    setSaving(true); try { const payload = { ...f, employeeId: employee.value, amount: num(f.amount) }; if (id) await api.updateSalaryAdvance(id, payload); else await api.createSalaryAdvance(payload); toast(id ? 'Advance updated' : 'Advance granted'); router.back(); } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+  return <Screen title={id ? 'Edit salary advance' : 'Grant salary advance'} subtitle="Schedule recovery through payroll" large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+    {loading ? <ListSkeleton rows={4} avatar={false} /> : <>
+      <FormSection>
+        <SelectField label="Employee" value={employee?.value} display={employee?.label} load={loadEmployees} queryKey="employees-active" onChange={setEmployee} required error={errors.employee} disabled={!!id} />
+      </FormSection>
+      <FormSection header="Advance">
+        <TextField label="Amount" kind="money" value={f.amount} onChange={(value) => setF((state) => ({ ...state, amount: value }))} required error={errors.amount} />
+        <DateField label="Disbursal date" value={f.disbursedDate} onChange={(value) => setF((state) => ({ ...state, disbursedDate: value }))} />
+        <TextField label="Recovery month" value={f.recoveryMonth} onChange={(value) => setF((state) => ({ ...state, recoveryMonth: value }))} placeholder="YYYY-MM" error={errors.month} required />
+        <TextField label="Reason" value={f.reason} onChange={(value) => setF((state) => ({ ...state, reason: value }))} required />
+        {id ? <ToggleField label="Recovered in payroll" value={f.isRecovered} onChange={(value) => setF((state) => ({ ...state, isRecovered: value }))} /> : null}
+        <TextField label="Notes" value={f.notes} onChange={(value) => setF((state) => ({ ...state, notes: value }))} multiline />
+      </FormSection>
+      <Button title={id ? 'Update advance' : 'Grant advance'} loading={saving} onPress={save} full />
+    </>}
+  </Screen>;
 }

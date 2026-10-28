@@ -20,6 +20,10 @@ export default function InvoiceDetail() {
   const x = q.data?.invoice;
   const lines: any[] = x?.lineItems || [];
   const tax = lines.length ? lines.reduce((s, l) => s + Number(l.cgstAmount || 0) + Number(l.sgstAmount || 0) + Number(l.igstAmount || 0), 0) : Number(x?.taxAmount || 0);
+  const taxableValue = lines.length ? lines.reduce((sum, line) => sum + Number(line.taxableValue || 0), 0) : Number(x?.amount || 0) - tax;
+  const cgst = lines.length ? lines.reduce((sum, line) => sum + Number(line.cgstAmount || 0), 0) : tax / 2;
+  const sgst = lines.length ? lines.reduce((sum, line) => sum + Number(line.sgstAmount || 0), 0) : tax - cgst;
+  const igst = lines.length ? lines.reduce((sum, line) => sum + Number(line.igstAmount || 0), 0) : tax;
 
   const setStatus = (status: 'Issued' | 'Paid' | 'Cancelled') => {
     const run = async () => { try { await ops.setInvoiceStatus(x.id, status, status === 'Cancelled' ? 'Cancelled from the app' : undefined); toast(status === 'Paid' ? 'Marked paid' : status === 'Cancelled' ? 'Invoice cancelled' : 'Marked unpaid'); void q.refresh(); } catch (e: any) { toast(e.message, 'error'); } };
@@ -63,12 +67,17 @@ export default function InvoiceDetail() {
           </Section>
 
           <Section>
-            <InfoRow label="Taxable value" value={formatINR(Number(x.amount) - tax)} />
-            {x.gstSnapshot?.supplyType === 'INTER_STATE' ? <InfoRow label="IGST" value={formatINR(tax)} /> : null}
-            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="CGST" value={formatINR(tax / 2)} /> : null}
-            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="SGST" value={formatINR(tax / 2)} /> : null}
+            <InfoRow label="Taxable value" value={formatINR(taxableValue)} />
+            {x.gstSnapshot?.supplyType === 'INTER_STATE' ? <InfoRow label="IGST" value={formatINR(igst)} /> : null}
+            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="CGST" value={formatINR(cgst)} /> : null}
+            {x.gstSnapshot?.supplyType !== 'INTER_STATE' ? <InfoRow label="SGST" value={formatINR(sgst)} /> : null}
             <InfoRow label="Total" value={<T variant="headline" num>{formatINR(x.amount)}</T>} />
           </Section>
+
+          {(x.panelSerialNumbers || []).length || x.inverterSerial ? <Section header="Issued equipment serials">
+            {(x.panelSerialNumbers || []).length ? <InfoRow label="Solar modules" value={(x.panelSerialNumbers || []).join(', ')} multiline /> : null}
+            {x.inverterSerial ? <InfoRow label="Inverter" value={x.inverterSerial} /> : null}
+          </Section> : null}
 
           {x.description && !lines.some((l) => l.itemDescription === x.description) ? <Section header="Notes"><InfoRow label="" value={x.description} multiline /></Section> : null}
         </>

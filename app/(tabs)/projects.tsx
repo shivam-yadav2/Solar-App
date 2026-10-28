@@ -17,6 +17,13 @@ const FILTERS = [
   { value: 'Installation Scheduled', label: 'Scheduled' }, { value: 'Installation In Progress', label: 'Installing' }, { value: 'Installed', label: 'Installed' },
   { value: 'Inspection Pending', label: 'Inspection' }, { value: 'Completed', label: 'Completed' }, { value: 'On Hold', label: 'On hold' },
 ];
+const PAYMENT_FILTERS = [
+  { value: 'all', label: 'Any payment' },
+  { value: 'Unpaid', label: 'Unpaid' },
+  { value: 'Partially Paid', label: 'Part paid' },
+  { value: 'Fully Paid', label: 'Paid' },
+  { value: 'Overdue', label: 'Overdue' },
+] as const;
 
 export default function ProjectsTab() {
   const router = useRouter();
@@ -26,8 +33,9 @@ export default function ProjectsTab() {
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
-  const list = usePaged<P>(['projects', 'list', search, status], async (page, limit) => {
-    const r = await api.getProjects({ page: String(page), limit: String(limit), search, status });
+  const [paymentStatus, setPaymentStatus] = useState<(typeof PAYMENT_FILTERS)[number]['value']>('all');
+  const list = usePaged<P>(['projects', 'list', search, status, paymentStatus], async (page, limit) => {
+    const r = await api.getProjects({ page: String(page), limit: String(limit), search, status, paymentStatus });
     return toPage(r.projects as P[], r as any, page);
   });
 
@@ -39,6 +47,7 @@ export default function ProjectsTab() {
       header={<>
         {!isCustomer ? <SearchBar value={text} onChange={setText} onSearch={setSearch} placeholder="Project, customer, mobile or brand" /> : null}
         {!isCustomer ? <Chips value={status} onChange={setStatus} options={FILTERS} /> : null}
+        {!isCustomer ? <Chips value={paymentStatus} onChange={setPaymentStatus} options={[...PAYMENT_FILTERS]} /> : null}
         {list.loading ? <ListSkeleton avatar={false} /> : list.error ? <ErrorState message={list.error} onRetry={list.refresh} /> : null}
       </>}
       data={list.loading || list.error ? [] : list.items}
@@ -47,7 +56,7 @@ export default function ProjectsTab() {
       onRefresh={list.refresh}
       onEndReached={list.loadMore}
       onEndReachedThreshold={0.4}
-      ListEmptyComponent={!list.loading && !list.error ? <EmptyState icon={<Zap size={44} color={p.tertiary} />} title={search || status !== 'all' ? 'No projects match' : 'No projects yet'} action={can('projects.create') && !isCustomer && !search ? { title: 'New project', onPress: () => router.push('/project-form') } : undefined} /> : null}
+      ListEmptyComponent={!list.loading && !list.error ? <EmptyState icon={<Zap size={44} color={p.tertiary} />} title={search || status !== 'all' || paymentStatus !== 'all' ? 'No projects match' : 'No projects yet'} action={can('projects.create') && !isCustomer && !search ? { title: 'New project', onPress: () => router.push('/project-form') } : undefined} /> : null}
       ListFooterComponent={<LoadMoreFooter loading={list.loadingMore} hasMore={list.hasMore} count={list.items.length} total={list.total} noun="projects" />}
       renderItem={({ item: x, index }) => {
         const step = PROJECT_STEPS.indexOf(x.status);

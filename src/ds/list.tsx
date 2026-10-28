@@ -51,7 +51,7 @@ export interface RowProps {
 export const Row: React.FC<RowProps> = ({ title, subtitle, value, icon, accessory, onPress, onLongPress, chevron, destructive, action, numberOfLines = 1, style }) => {
   const p = useTheme();
   const body = (
-    <View style={[{ minHeight: subtitle ? 60 : 46, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.l, paddingVertical: subtitle ? 9 : 11, gap: space.m }, style]}>
+    <View style={[{ minHeight: subtitle ? 64 : 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.l, paddingVertical: subtitle ? 10 : 12, gap: space.m }, style]}>
       {icon}
       <View style={{ flex: 1, gap: 2 }}>
         {typeof title === 'string' ? (
@@ -64,7 +64,7 @@ export const Row: React.FC<RowProps> = ({ title, subtitle, value, icon, accessor
       {chevron ?? !!onPress ? <ChevronRight size={18} color={p.tertiary} strokeWidth={2.4} /> : null}
     </View>
   );
-  return onPress || onLongPress ? <Tap onPress={onPress} onLongPress={onLongPress} scaleTo={0.985} haptics accessibilityRole="button">{body}</Tap> : body;
+  return onPress || onLongPress ? <Tap onPress={onPress} onLongPress={onLongPress} scaleTo={0.985} haptics accessibilityRole="button" accessibilityLabel={typeof title === 'string' ? [title, typeof subtitle === 'string' ? subtitle : '', typeof value === 'string' || typeof value === 'number' ? String(value) : ''].filter(Boolean).join(', ') : undefined}>{body}</Tap> : body;
 };
 
 /** Key / value line for detail screens. */

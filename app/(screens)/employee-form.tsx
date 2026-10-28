@@ -1,12 +1,49 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, FormField, PrimaryButton, Screen } from '../../src/components/ui';
+import { Button, DateField, FormSection, ListSkeleton, Screen, SelectField, TextField, haptic, num, todayISO, useOverlay } from '../../src/ds';
+
+const ROLES = ['Solar EPC Engineer', 'Site Supervisor', 'Solar Technician', 'Electrician', 'Sales & Marketing', 'Liaison Officer', 'Operations Manager', 'Helper / Laborer', 'Accountant'];
+const TYPES = ['Full-Time', 'Contract', 'Daily Wage', 'Commission'];
+const STATUSES = ['Active', 'On Leave', 'Inactive', 'Terminated'];
 
 export default function EmployeeFormScreen() {
-  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const [form, setForm] = useState<any>({ name: '', email: '', phone: '', role: 'Solar Technician', department: 'Operations', employmentType: 'Full-Time', joiningDate: new Date().toISOString().slice(0, 10), baseSalary: '', bankAccount: '', bankName: '', ifscCode: '', status: 'Active', notes: '' }); const [saving, setSaving] = useState(false); const [loading, setLoading] = useState(Boolean(id)); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  useEffect(() => { if (!id) return; api.getEmployees({ limit: '100' }).then(x => { const employee = x.employees.find(item => item.id === id); if (employee) setForm(employee); }).catch(e => Alert.alert('Could not load employee', e.message)).finally(() => setLoading(false)); }, [id]);
-  const save = async () => { if (!form.name.trim() || !form.role || form.baseSalary === '') { Alert.alert('Missing details', 'Name, role, and base salary are required.'); return; } setSaving(true); try { const payload = { ...form, baseSalary: Number(form.baseSalary) }; if (id) await api.updateEmployee(String(id), payload); else await api.createEmployee(payload); router.back(); } catch (e: any) { Alert.alert(id ? 'Could not update employee' : 'Could not add employee', e.message); } finally { setSaving(false); } };
-  return <Screen title={id ? 'Edit Employee' : 'Add Employee'} subtitle="Payroll and bank information" onBack={() => router.back()}>{loading ? null : <Card><FormField label="Full name" value={form.name} onChangeText={set('name')} required /><FormField label="Email" value={form.email} onChangeText={set('email')} keyboardType="email-address" /><FormField label="Phone" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" /><ChoiceField label="Role" value={form.role} options={['Solar EPC Engineer', 'Site Supervisor', 'Solar Technician', 'Electrician', 'Sales & Marketing', 'Liaison Officer', 'Operations Manager', 'Helper / Laborer', 'Accountant']} onChange={set('role')} /><FormField label="Department" value={form.department} onChangeText={set('department')} /><ChoiceField label="Employment type" value={form.employmentType} options={['Full-Time', 'Contract', 'Daily Wage', 'Commission']} onChange={set('employmentType')} /><FormField label="Joining date" value={form.joiningDate} onChangeText={set('joiningDate')} /><FormField label="Base salary" value={String(form.baseSalary)} onChangeText={set('baseSalary')} keyboardType="numeric" required /><FormField label="Bank name" value={form.bankName} onChangeText={set('bankName')} /><FormField label="Bank account" value={form.bankAccount} onChangeText={set('bankAccount')} keyboardType="numeric" /><FormField label="IFSC code" value={form.ifscCode} onChangeText={set('ifscCode')} /><FormField label="Notes" value={form.notes} onChangeText={set('notes')} multiline /><PrimaryButton label={saving ? 'Saving…' : id ? 'Update Employee' : 'Add Employee'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const { toast } = useOverlay();
+  const [f, setF] = useState<any>({ name: '', email: '', phone: '', role: 'Solar Technician', department: 'Operations', employmentType: 'Full-Time', joiningDate: todayISO(), baseSalary: '', bankAccount: '', bankName: '', ifscCode: '', upiId: '', panNumber: '', aadhaarNumber: '', status: 'Active', notes: '' });
+  const [loading, setLoading] = useState(!!id); const [saving, setSaving] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({});
+  useEffect(() => { if (!id) return; api.getEmployees({ limit: '500' }).then((result) => { const employee = result.employees.find((item) => item.id === id); if (employee) setF({ ...employee, baseSalary: String(employee.baseSalary) }); else toast('Employee not found', 'error'); }).catch((e) => toast(e.message, 'error')).finally(() => setLoading(false)); }, [id, toast]);
+  const set = (key: string) => (value: string) => setF((state: any) => ({ ...state, [key]: value }));
+  const save = async () => {
+    const validation: Record<string, string> = {};
+    if (!f.name.trim()) validation.name = 'Enter the employee name.'; if (!f.role) validation.role = 'Choose a role.'; if (num(f.baseSalary) < 0) validation.salary = 'Enter a valid salary.';
+    setErrors(validation); if (Object.keys(validation).length) { haptic.error(); return; }
+    setSaving(true); try { const payload = { ...f, baseSalary: num(f.baseSalary) }; if (id) await api.updateEmployee(id, payload); else await api.createEmployee(payload); toast(id ? 'Employee updated' : 'Employee added'); router.back(); } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+  return <Screen title={id ? 'Edit employee' : 'Add employee'} subtitle="Payroll, identity and settlement information" large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+    {loading ? <ListSkeleton rows={5} avatar={false} /> : <>
+      <FormSection header="Employee">
+        <TextField label="Full name" kind="name" value={f.name} onChange={set('name')} error={errors.name} required />
+        <TextField label="Email" kind="email" value={f.email} onChange={set('email')} />
+        <TextField label="Phone" kind="phone" value={f.phone} onChange={set('phone')} />
+        <SelectField label="Role" value={f.role} options={ROLES.map((value) => ({ value, label: value }))} onChange={(o) => o && set('role')(o.value)} error={errors.role} required />
+        <TextField label="Department" value={f.department} onChange={set('department')} />
+        <SelectField label="Employment type" value={f.employmentType} options={TYPES.map((value) => ({ value, label: value }))} onChange={(o) => o && set('employmentType')(o.value)} />
+        <SelectField label="Status" value={f.status} options={STATUSES.map((value) => ({ value, label: value }))} onChange={(o) => o && set('status')(o.value)} />
+        <DateField label="Joining date" value={f.joiningDate} onChange={set('joiningDate')} />
+        <TextField label="Base salary" kind="money" value={String(f.baseSalary)} onChange={set('baseSalary')} error={errors.salary} required />
+      </FormSection>
+      <FormSection header="Bank settlement">
+        <TextField label="Bank name" value={f.bankName} onChange={set('bankName')} />
+        <TextField label="Account number" kind="number" value={f.bankAccount} onChange={set('bankAccount')} />
+        <TextField label="IFSC" value={f.ifscCode} onChange={(value) => set('ifscCode')(value.toUpperCase())} />
+        <TextField label="UPI ID" value={f.upiId || ''} onChange={set('upiId')} />
+      </FormSection>
+      <FormSection header="Compliance">
+        <TextField label="PAN" value={f.panNumber || ''} onChange={(value) => set('panNumber')(value.toUpperCase())} />
+        <TextField label="Aadhaar" kind="number" value={f.aadhaarNumber || ''} onChange={set('aadhaarNumber')} />
+        <TextField label="Notes / skills" value={f.notes || ''} onChange={set('notes')} multiline />
+      </FormSection>
+      <Button title={id ? 'Update employee' : 'Add employee'} loading={saving} onPress={save} full />
+    </>}
+  </Screen>;
 }

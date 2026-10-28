@@ -3,22 +3,25 @@ import { ActivityIndicator, Image, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Camera, FileUp, Paperclip, X } from 'lucide-react-native';
-import { api } from '../lib/api';
+import { uploadWithProgress } from '../lib/transfers';
 import { radius, space, T, Tap, useOverlay, useTheme } from '../ds';
 
-export interface Attached { fileId: string; fileName: string; uri?: string; mimeType?: string }
+export interface Attached { fileId: string; fileName: string; fileSize?: number; uri?: string; mimeType?: string }
 
 /** Take a photo / pick an image or file and upload it (receipts, site photos, documents). */
 export const AttachField: React.FC<{ label: string; value: Attached | null; onChange: (a: Attached | null) => void; documents?: boolean; hint?: string }> = ({ label, value, onChange, documents = true, hint }) => {
   const p = useTheme();
   const { actions, toast } = useOverlay();
   const [busy, setBusy] = useState(false);
-  const upload = async (file: { uri: string; name: string; mimeType?: string }) => {
+  const [progress, setProgress] = useState(0);
+  const [controller, setController] = useState<AbortController | null>(null);
+  const upload = async (file: { uri: string; name: string; mimeType?: string; size?: number }) => {
+    const next = new AbortController(); setController(next); setProgress(0);
     setBusy(true);
     try {
-      const r = await api.uploadFile(file);
-      onChange({ fileId: r.fileId, fileName: r.fileName || file.name, uri: file.uri, mimeType: file.mimeType });
-    } catch (e: any) { toast(e.message || 'Upload failed', 'error'); } finally { setBusy(false); }
+      const r = await uploadWithProgress(file, { signal: next.signal, onProgress: setProgress, retries: 1 });
+      onChange({ fileId: r.fileId, fileName: r.fileName || file.name, fileSize: r.fileSize, uri: file.uri, mimeType: r.mimeType || file.mimeType });
+    } catch (e: any) { toast(e.message || 'Upload failed', 'error'); } finally { setBusy(false); setController(null); }
   };
   const fromCamera = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -32,7 +35,7 @@ export const AttachField: React.FC<{ label: string; value: Attached | null; onCh
   };
   const fromFiles = async () => {
     const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
-    if (!r.canceled && r.assets[0]) await upload({ uri: r.assets[0].uri, name: r.assets[0].name, mimeType: r.assets[0].mimeType || undefined });
+    if (!r.canceled && r.assets[0]) await upload({ uri: r.assets[0].uri, name: r.assets[0].name, mimeType: r.assets[0].mimeType || undefined, size: r.assets[0].size });
   };
   const choose = () => actions({
     title: label,
@@ -53,8 +56,10 @@ export const AttachField: React.FC<{ label: string; value: Attached | null; onCh
           <Tap onPress={() => onChange(null)} hitSlop={10} accessibilityLabel="Remove attachment"><X size={20} color={p.secondary} /></Tap>
         </View>
       ) : (
-        <Tap onPress={busy ? undefined : choose} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+        <Tap onPress={busy ? undefined : choose} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 }} accessibilityRole="button" accessibilityLabel={busy ? `Uploading, ${Math.round(progress * 100)} percent` : 'Add photo or file'}>
           {busy ? <ActivityIndicator color={p.accent} /> : <Camera size={20} color={p.accentText} />}
+          {busy ? <T variant="caption" color="secondary" accessibilityLiveRegion="polite">{Math.round(progress * 100)}%</T> : null}
+          {busy ? <Tap onPress={() => controller?.abort()} accessibilityRole="button" accessibilityLabel="Cancel upload" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><X size={18} color={p.red} /></Tap> : null}
           <T variant="body" color="accent">{busy ? 'Uploading…' : 'Add photo or file'}</T>
         </Tap>
       )}
@@ -75,8 +80,8 @@ export const PhotosField: React.FC<{ label: string; value: Attached[]; onChange:
     const added: Attached[] = [];
     for (const a of list) {
       try {
-        const r = await api.uploadFile({ uri: a.uri, name: a.fileName || `site-${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg' });
-        added.push({ fileId: r.fileId, fileName: r.fileName, uri: a.uri, mimeType: 'image/jpeg' });
+        const r = await uploadWithProgress({ uri: a.uri, name: a.fileName || `site-${Date.now()}.jpg`, mimeType: a.mimeType || 'image/jpeg' }, { retries: 1 });
+        added.push({ fileId: r.fileId, fileName: r.fileName, fileSize: r.fileSize, uri: a.uri, mimeType: r.mimeType || 'image/jpeg' });
       } catch (e: any) { toast(e.message || 'A photo did not upload', 'error'); }
       setBusy((n) => n - 1);
     }
@@ -101,7 +106,7 @@ export const PhotosField: React.FC<{ label: string; value: Attached[]; onChange:
         {value.map((a) => (
           <View key={a.fileId}>
             <Image source={{ uri: a.uri }} style={{ width: 72, height: 72, borderRadius: radius.s, backgroundColor: p.fill }} />
-            <Tap onPress={() => onChange(value.filter((x) => x.fileId !== a.fileId))} hitSlop={8} style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: p.label, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Remove photo">
+            <Tap onPress={() => onChange(value.filter((x) => x.fileId !== a.fileId))} hitSlop={8} style={{ position: 'absolute', top: -12, right: -12, width: 44, height: 44, borderRadius: 22, backgroundColor: p.label, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Remove photo">
               <X size={13} color={p.bg} strokeWidth={3} />
             </Tap>
           </View>

@@ -33,20 +33,20 @@ export function PlatformHome() {
     <Screen title="Platform" subtitle="SolarOS across every company" right={<HeaderActions />} refreshing={a.refreshing} onRefresh={() => { void a.refresh(); void b.refresh(); void s.refresh(); void u.refresh(); }}>
       {a.error ? <ErrorState message={a.error} onRetry={a.refresh} /> : (
         <StatGrid>
-          {canBilling ? <StatTile label="MRR" value={b.data?.mrr ?? a.data?.totalMRR ?? 0} money tone="green" icon={<IndianRupee size={15} color={p.green} />} hint={b.data ? `ARR ${formatMoneyCompact(b.data.arr)}` : undefined} onPress={() => go('/platform/billing')} /> : null}
-          {canBilling ? <StatTile label="Paying companies" value={b.data?.payingCompanies ?? 0} tone="blue" icon={<CreditCard size={15} color={p.blue} />} hint={b.data ? `${formatMoneyCompact(b.data.collectedThisMonth)} collected this month` : undefined} onPress={() => go('/platform/billing')} /> : null}
+          {canBilling ? <StatTile label="MRR" value={b.data?.mrr ?? a.data?.totalMRR ?? 0} money tone="green" icon={<IndianRupee size={15} color={p.green} />} hint={b.data ? `ARR ${formatMoneyCompact(b.data.arr)}` : undefined} /> : null}
+          {canBilling ? <StatTile label="Paying companies" value={b.data?.payingCompanies ?? 0} tone="blue" icon={<CreditCard size={15} color={p.blue} />} hint={b.data ? `${formatMoneyCompact(b.data.collectedThisMonth)} collected this month` : undefined} /> : null}
           <StatTile label="Companies" value={a.data?.totalTenants ?? 0} tone="accent" icon={<Building2 size={15} color={p.accentText} />} hint={`${a.data?.activeTenants ?? 0} active · ${a.data?.trialTenants ?? 0} trial`} onPress={() => go('/tenants')} />
           <StatTile label="Solar projects" value={a.data?.totalProjectsAcrossTenants ?? 0} tone="orange" icon={<Zap size={15} color={p.orange} />} hint={`${a.data?.totalKWAcrossTenants ?? 0} kW managed`} />
         </StatGrid>
       )}
 
       <Section header="Needs attention">
-        {canBilling && b.data && b.data.overdue.length ? <Row icon={<IconTile icon={<CreditCard size={17} color={p.red} />} tone="red" />} title="Overdue invoices" subtitle={formatINR(b.data.overdueAmount)} value={String(b.data.overdue.length)} onPress={() => go('/platform/billing?status=overdue')} /> : null}
+        {canBilling && b.data && b.data.overdue.length ? <Row icon={<IconTile icon={<CreditCard size={17} color={p.red} />} tone="red" />} title="Overdue invoices" subtitle={formatINR(b.data.overdueAmount)} value={String(b.data.overdue.length)} /> : null}
         {canBilling && life && life.grace + life.read_only + life.locked > 0 ? <Row icon={<IconTile icon={<Building2 size={17} color={p.orange} />} tone="orange" />} title="Renewals overdue" subtitle={`${life.grace} in grace · ${life.read_only} read-only · ${life.locked} locked`} onPress={() => go('/tenants')} /> : null}
-        {canSupport && s.data ? <Row icon={<IconTile icon={<LifeBuoy size={17} color={p.blue} />} tone="blue" />} title="Support tickets" subtitle={`${s.data.counts.urgent} urgent · ${s.data.counts.unassigned} unassigned`} value={String(s.data.counts.open)} onPress={() => go('/platform/support')} /> : null}
-        {canUsage && u.data ? <Row icon={<IconTile icon={<TrendingDown size={17} color={p.red} />} tone="red" />} title="Churn risk" subtitle="Low sign-ins or falling activity" value={String(churn)} onPress={() => go('/platform/usage?filter=churn')} /> : null}
-        {canUsage && u.data ? <Row icon={<IconTile icon={<TrendingUp size={17} color={p.green} />} tone="green" />} title="Ready to upgrade" subtitle="Near their plan limits or growing fast" value={String(upsell)} onPress={() => go('/platform/usage?filter=upsell')} /> : null}
-        {canUsage ? <Row icon={<IconTile icon={<Activity size={17} color={p.purple} />} tone="purple" />} title="Usage by company" onPress={() => go('/platform/usage')} /> : null}
+        {canSupport && s.data ? <Row icon={<IconTile icon={<LifeBuoy size={17} color={p.blue} />} tone="blue" />} title="Support tickets" subtitle={`${s.data.counts.urgent} urgent · ${s.data.counts.unassigned} unassigned`} value={String(s.data.counts.open)} /> : null}
+        {canUsage && u.data ? <Row icon={<IconTile icon={<TrendingDown size={17} color={p.red} />} tone="red" />} title="Churn risk" subtitle="Low sign-ins or falling activity" value={String(churn)} /> : null}
+        {canUsage && u.data ? <Row icon={<IconTile icon={<TrendingUp size={17} color={p.green} />} tone="green" />} title="Ready to upgrade" subtitle="Near their plan limits or growing fast" value={String(upsell)} /> : null}
+        {canUsage ? <Row icon={<IconTile icon={<Activity size={17} color={p.purple} />} tone="purple" />} title="Usage by company" /> : null}
       </Section>
 
       {canBilling && months.some((m) => m.value > 0) ? (
@@ -59,7 +59,7 @@ export function PlatformHome() {
 
       {canBilling && b.data?.renewalsNext30.length ? (
         <Section header="Renewals in the next 30 days">
-          {b.data.renewalsNext30.slice(0, 6).map((r) => <Row key={r.tenantId} title={r.name} subtitle={`Due ${formatDate(r.dueAt)}${r.enforced ? '' : ' · not enforced'}`} value={formatMoneyCompact(r.monthly)} onPress={() => go(`/tenant/${r.tenantId}`)} />)}
+          {b.data.renewalsNext30.slice(0, 6).map((r) => <Row key={r.tenantId} title={r.name} subtitle={`Due ${formatDate(r.dueAt)}${r.enforced ? '' : ' · not enforced'}`} value={formatMoneyCompact(r.monthly)} onPress={() => router.push({ pathname: '/tenant-form', params: { id: r.tenantId } })} />)}
         </Section>
       ) : null}
     </Screen>

@@ -2,84 +2,26 @@ import React, { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, PrimaryButton, Screen, ToggleField } from '../../src/components/ui';
+import type { GstRegistrationType } from '../../src/types';
+import { Button, ChoiceField, ErrorState, FormSection, Screen, Spinner, TextField, ToggleField, useUnsavedChanges } from '../../src/ds';
 
-const arrayKeys = ['paymentMethods', 'panelBrands', 'inverterBrands', 'batteryBrands', 'expenseCategories', 'complaintCategories', 'documentCategories'];
-const defaultGstSettings = { enabled: true, registrationType: 'Regular', stateCode: '', defaultHsnSacCode: '85414011', defaultTaxRate: 5, priceIncludesTax: true, invoicePrefix: 'INV' };
+const arrayKeys = ['paymentMethods', 'panelBrands', 'inverterBrands', 'batteryBrands', 'expenseCategories', 'complaintCategories', 'documentCategories'] as const;
+const gstDefault = { enabled: true, registrationType: 'Regular' as GstRegistrationType, stateCode: '', defaultHsnSacCode: '85414011', defaultTaxRate: 5, priceIncludesTax: true, invoicePrefix: 'INV' };
+const split = (value: string) => value.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
 
 export default function SettingsFormScreen() {
-  const router = useRouter();
-  const [form, setForm] = useState<any>(null);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    api.getSettings()
-      .then(({ settings }) => setForm({
-        ...settings,
-        gstSettings: settings.gstSettings || defaultGstSettings,
-        warrantyExpiryAlertDays: String(settings.warrantyExpiryAlertDays),
-        ...Object.fromEntries(arrayKeys.map(key => [key, (settings as any)[key]?.join(', ') || ''])),
-      }))
-      .catch(e => setError(e.message));
-  }, []);
-
-  const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const setGst = (key: string, value: string | boolean | number) => setForm((current: any) => ({ ...current, gstSettings: { ...current.gstSettings, [key]: value } }));
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const payload: any = {
-        ...form,
-        warrantyExpiryAlertDays: Number(form.warrantyExpiryAlertDays),
-        gstSettings: {
-          ...form.gstSettings,
-          stateCode: String(form.gstSettings.stateCode || '').replace(/\D/g, '').slice(0, 2),
-          defaultTaxRate: Number(form.gstSettings.defaultTaxRate) || 0,
-          invoicePrefix: String(form.gstSettings.invoicePrefix || 'INV').toUpperCase(),
-        },
-      };
-      arrayKeys.forEach(key => { payload[key] = String(form[key] || '').split(',').map((value: string) => value.trim()).filter(Boolean); });
-      await api.updateSettings(payload);
-      router.back();
-    } catch (e: any) {
-      Alert.alert('Could not update settings', e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return <Screen title="Edit Settings" subtitle="Company profile, GST and operating defaults" onBack={() => router.back()}>{error ? <ErrorState message={error} /> : !form ? <Loading /> : <>
-    <Card>
-      <FormField label="Company name" value={form.companyName} onChangeText={set('companyName')} required />
-      <FormField label="Tagline" value={form.tagline} onChangeText={set('tagline')} />
-      <FormField label="Phone" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
-      <FormField label="Email" value={form.email} onChangeText={set('email')} keyboardType="email-address" />
-      <FormField label="Website" value={form.website} onChangeText={set('website')} />
-      <FormField label="Address" value={form.address} onChangeText={set('address')} multiline />
-      <FormField label="City" value={form.city} onChangeText={set('city')} />
-      <FormField label="State" value={form.state} onChangeText={set('state')} />
-      <FormField label="Pincode" value={form.pincode} onChangeText={set('pincode')} keyboardType="numeric" />
-      <FormField label="GST number" value={form.gstNumber} onChangeText={set('gstNumber')} />
-      <FormField label="Warranty alert days" value={form.warrantyExpiryAlertDays} onChangeText={set('warrantyExpiryAlertDays')} keyboardType="numeric" />
-    </Card>
-    <Card>
-      <ToggleField label="Enable GST invoicing" description="Apply these rules while creating invoices." value={Boolean(form.gstSettings.enabled)} onValueChange={(value) => setGst('enabled', value)} />
-      <ChoiceField label="Registration type" value={form.gstSettings.registrationType} options={['Regular', 'Composition', 'Unregistered']} onChange={(value) => setGst('registrationType', value)} />
-      <FormField label="GST state code" value={String(form.gstSettings.stateCode || '')} onChangeText={(value) => setGst('stateCode', value)} placeholder="09" keyboardType="numeric" />
-      <FormField label="Default HSN / SAC" value={form.gstSettings.defaultHsnSacCode} onChangeText={(value) => setGst('defaultHsnSacCode', value)} placeholder="85414011" />
-      <FormField label="Default GST rate (%)" value={String(form.gstSettings.defaultTaxRate ?? '')} onChangeText={(value) => setGst('defaultTaxRate', value)} keyboardType="numeric" />
-      <FormField label="Invoice prefix" value={form.gstSettings.invoicePrefix} onChangeText={(value) => setGst('invoicePrefix', value)} placeholder="INV" />
-      <ToggleField label="Prices include GST" description="Turn this off when GST should be added above the entered invoice value." value={Boolean(form.gstSettings.priceIncludesTax)} onValueChange={(value) => setGst('priceIncludesTax', value)} />
-    </Card>
-    <Card>
-      <FormField label="Payment methods (comma separated)" value={form.paymentMethods} onChangeText={set('paymentMethods')} multiline />
-      <FormField label="Panel brands" value={form.panelBrands} onChangeText={set('panelBrands')} multiline />
-      <FormField label="Inverter brands" value={form.inverterBrands} onChangeText={set('inverterBrands')} multiline />
-      <FormField label="Battery brands" value={form.batteryBrands} onChangeText={set('batteryBrands')} multiline />
-      <FormField label="Expense categories" value={form.expenseCategories} onChangeText={set('expenseCategories')} multiline />
-    </Card>
-    <PrimaryButton label={saving ? 'Saving…' : 'Save Settings'} onPress={() => void save()} disabled={saving} />
-  </>}</Screen>;
+  const router = useRouter(); const [form, setForm] = useState<any>(null); const [initial, setInitial] = useState(''); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
+  useEffect(() => { api.getSettings().then(({ settings }) => { const next = { ...settings, gstSettings: settings.gstSettings || gstDefault, warrantyExpiryAlertDays: String(settings.warrantyExpiryAlertDays), ...Object.fromEntries(arrayKeys.map((key) => [key, (settings as any)[key]?.join('\n') || ''])) }; setForm(next); setInitial(JSON.stringify(next)); }).catch((e) => setError(e.message)); }, []);
+  const dirty = !!form && JSON.stringify(form) !== initial; const allowLeave = useUnsavedChanges(dirty);
+  const set = (key: string, value: any) => setForm((x: any) => ({ ...x, [key]: value })); const setGst = (key: string, value: any) => setForm((x: any) => ({ ...x, gstSettings: { ...x.gstSettings, [key]: value } }));
+  const save = async () => { setSaving(true); try { const payload: any = { ...form, warrantyExpiryAlertDays: Number(form.warrantyExpiryAlertDays) || 0, gstSettings: { ...form.gstSettings, stateCode: String(form.gstSettings.stateCode || '').replace(/\D/g, '').slice(0, 2), defaultTaxRate: Number(form.gstSettings.defaultTaxRate) || 0, invoicePrefix: String(form.gstSettings.invoicePrefix || 'INV').toUpperCase() } }; arrayKeys.forEach((key) => { payload[key] = split(String(form[key] || '')); }); const r = await api.updateSettings(payload); setInitial(JSON.stringify(form)); Alert.alert('Defaults saved', 'New records and invoices will use these defaults.', [{ text: 'Done', onPress: () => { allowLeave(); router.back(); } }]); } catch (e: any) { Alert.alert('Could not update settings', e.message); } finally { setSaving(false); } };
+  return <Screen title="GST & defaults" subtitle="Calculation rules and reusable operating lists" back large={false} footer={form ? <Button title="Save settings" full loading={saving} disabled={!dirty} onPress={() => void save()} style={{ flex: 1 }} /> : undefined}>
+    {error ? <ErrorState message={error} /> : !form ? <Spinner /> : <>
+      <FormSection header="GST on invoices" footer="Confirm the correct HSN/SAC and tax rate with your GST professional before issuing tax invoices."><ToggleField label="Charge GST" value={Boolean(form.gstSettings.enabled)} onChange={(v) => setGst('enabled', v)} hint="Applies these calculation rules to new invoices." /><ChoiceField label="Registration type" value={form.gstSettings.registrationType} onChange={(v) => setGst('registrationType', v)} options={[{ value: 'Regular', label: 'Regular' }, { value: 'Composition', label: 'Composition' }, { value: 'Unregistered', label: 'Unregistered' }]} /><TextField label="GST state code" kind="number" value={String(form.gstSettings.stateCode || '')} onChange={(v) => setGst('stateCode', v)} maxLength={2} hint="First two GSTIN digits; 09 is Uttar Pradesh." /><TextField label="Default HSN / SAC" value={form.gstSettings.defaultHsnSacCode} onChange={(v) => setGst('defaultHsnSacCode', v)} /><TextField label="Default GST rate (%)" kind="decimal" value={String(form.gstSettings.defaultTaxRate ?? '')} onChange={(v) => setGst('defaultTaxRate', v)} /><TextField label="Invoice prefix" value={form.gstSettings.invoicePrefix} onChange={(v) => setGst('invoicePrefix', v.toUpperCase())} /><ToggleField label="Entered prices include GST" value={Boolean(form.gstSettings.priceIncludesTax)} onChange={(v) => setGst('priceIncludesTax', v)} hint="When off, GST is added above the entered taxable value." /></FormSection>
+      <FormSection header="General"><TextField label="Website" value={form.website || ''} onChange={(v) => set('website', v)} placeholder="https://" /><TextField label="Google review link" value={form.googleReviewUrl || ''} onChange={(v) => set('googleReviewUrl', v)} placeholder="https://g.page/r/..." hint="Happy customers can be directed here after feedback." /><TextField label="Warranty expiry warning (days)" kind="number" value={form.warrantyExpiryAlertDays} onChange={(v) => set('warrantyExpiryAlertDays', v)} /></FormSection>
+      <FormSection header="Finance lists" footer="Enter one option per line."><TextField label="Payment methods" value={form.paymentMethods} onChange={(v) => set('paymentMethods', v)} multiline /><TextField label="Expense categories" value={form.expenseCategories} onChange={(v) => set('expenseCategories', v)} multiline /></FormSection>
+      <FormSection header="Equipment lists" footer="These options appear in project and quotation forms."><TextField label="Panel brands" value={form.panelBrands} onChange={(v) => set('panelBrands', v)} multiline /><TextField label="Inverter brands" value={form.inverterBrands} onChange={(v) => set('inverterBrands', v)} multiline /><TextField label="Battery brands" value={form.batteryBrands} onChange={(v) => set('batteryBrands', v)} multiline /></FormSection>
+      <FormSection header="Service & documents"><TextField label="Complaint categories" value={form.complaintCategories} onChange={(v) => set('complaintCategories', v)} multiline /><TextField label="Document categories" value={form.documentCategories} onChange={(v) => set('documentCategories', v)} multiline /></FormSection>
+    </>}
+  </Screen>;
 }

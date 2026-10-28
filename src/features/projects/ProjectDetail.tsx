@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Linking, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { CircleCheck, Ellipsis, FileText, HardHat, IndianRupee, Package, Pencil, Plus, ReceiptText, ShieldCheck, Trash2, UserRound, Wrench, Zap } from 'lucide-react-native';
+import { CircleCheck, CircleDollarSign, Ellipsis, FileText, HardHat, IndianRupee, Package, Pencil, Plus, ReceiptText, ShieldCheck, Trash2, UserRound, Wrench, Zap } from 'lucide-react-native';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/query';
 import { useAuth } from '../../context/AuthContext';
@@ -37,7 +37,7 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
   };
   const del = () => {
     const run = async () => { try { await api.deleteProject(id); toast('Moved to recycle bin'); router.back(); } catch (e: any) { toast(e.message, 'error'); } };
-    if (Platform.OS === 'web') return void run();
+    if (Platform.OS === 'web') { if (globalThis.confirm('Delete this project?\n\nIt moves to the recycle bin for 30 days.')) void run(); return; }
     Alert.alert('Delete project?', 'It moves to the recycle bin for 30 days. Projects with payments or invoices cannot be deleted.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void run() }]);
   };
   const menu = () => actions({
@@ -46,6 +46,8 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
       can('projects.edit') && { label: 'Edit project', icon: <Pencil size={20} color={p.accentText} />, onPress: () => go('/project-form', { id }) },
       can('projects.edit') && { label: 'Change stage', icon: <CircleCheck size={20} color={p.accentText} />, onPress: () => setStageSheet(true) },
       can('payments.create') && { label: 'Record payment', icon: <IndianRupee size={20} color={p.accentText} />, onPress: () => go('/payment-form', { projectId: id, customerId: x!.customerId }) },
+      can('expenses.create') && { label: 'Log expense', icon: <CircleDollarSign size={20} color={p.accentText} />, onPress: () => go('/expense-form', { projectId: id, customerId: x!.customerId }) },
+      can('invoices.create') && { label: 'Issue invoice', icon: <ReceiptText size={20} color={p.accentText} />, onPress: () => go('/invoice-form', { projectId: id, customerId: x!.customerId }) },
       can('projects.delete') && { label: 'Delete project', destructive: true, icon: <Trash2 size={20} color={p.red} />, onPress: del },
     ].filter(Boolean) as any,
   });
@@ -116,11 +118,17 @@ function Overview({ x, onPick }: { x: P; onPick?: (s: ProjectStatus) => void }) 
       <Section header="System">
         <InfoRow label="Capacity" value={`${formatNumber(x.capacityKw)} kW`} />
         <InfoRow label="Panels" value={[x.panelsCount ? `${x.panelsCount} ×` : '', x.panelBrand, x.panelModel].filter(Boolean).join(' ')} />
+        {x.panelSerialNumbers?.length ? <InfoRow label="Panel serials" value={x.panelSerialNumbers.join(', ')} multiline /> : null}
         <InfoRow label="Inverter" value={[x.inverterBrand, x.inverterModel].filter(Boolean).join(' ')} />
-        <InfoRow label="Battery" value={x.batteryInstalled ? x.batteryBrand || 'Yes' : 'No'} />
+        {x.inverterSerial ? <InfoRow label="Inverter serial" value={x.inverterSerial} /> : null}
+        <InfoRow label="Battery" value={x.batteryInstalled ? [x.batteryBrand, x.batteryModel, x.batteryCapacity].filter(Boolean).join(' ') || 'Yes' : 'No'} />
         <InfoRow label="Structure" value={[x.structureType, x.mountingType].filter(Boolean).join(' · ')} />
         <InfoRow label="Net metering" value={x.netMeteringStatus} />
+        {x.systemConfiguration ? <InfoRow label="Configuration" value={x.systemConfiguration} /> : null}
+        {x.installationType ? <InfoRow label="Installation" value={x.installationType} /> : null}
+        {x.uppclAccountNo ? <InfoRow label="DISCOM account" value={x.uppclAccountNo} /> : null}
         {x.planPackage ? <InfoRow label="Package" value={x.planPackage} /> : null}
+        {x.technicalNotes ? <InfoRow label="Technical notes" value={x.technicalNotes} multiline /> : null}
       </Section>
       <Section header="Dates & place">
         <InfoRow label="Booked" value={formatDate(x.bookingDate)} />
@@ -153,7 +161,13 @@ function Money({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
       </Section>
       {(data?.invoices || []).length ? (
         <Section header="Invoices">
-          {data.invoices.map((inv: any) => <Row key={inv.id} icon={<IconTile icon={<ReceiptText size={17} color={p.accentText} />} />} title={inv.invoiceNumber} subtitle={`${formatDate(inv.invoiceDate)} · ${formatINR(inv.totalAmount)}`} accessory={<Badge text={inv.status} />} onPress={() => go('/invoice/[id]', { id: inv.id })} />)}
+          {data.invoices.map((inv: any) => <Row key={inv.id} icon={<IconTile icon={<ReceiptText size={17} color={p.accentText} />} />} title={inv.invoiceNumber} subtitle={`${formatDate(inv.invoiceDate)} · ${formatINR(inv.totalAmount ?? inv.amount)}`} accessory={<Badge text={inv.status} />} onPress={() => go('/invoice/[id]', { id: inv.id })} />)}
+        </Section>
+      ) : null}
+      {can('invoices.create') && !isCustomer ? (
+        <Section header={(data?.invoices || []).length ? "Invoice actions" : "Invoices (0)"}>
+          {!(data?.invoices || []).length ? <Row title="No invoices issued" /> : null}
+          <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Issue invoice" action chevron={false} onPress={() => go('/invoice-form', { projectId: x.id, customerId: x.customerId })} />
         </Section>
       ) : null}
       {!isCustomer && can('expenses.view') ? (
@@ -338,7 +352,7 @@ function Files({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
         {!docs.length && (isCustomer || !can('documents.create')) ? <Row title="No documents yet" /> : null}
       </Section>
       <Section header={`Warranties · ${warranties.length}`}>
-        {warranties.map((w) => <Row key={w.id} icon={<IconTile icon={<ShieldCheck size={17} color={p.blue} />} tone="blue" />} title={w.itemType || w.equipmentType || 'Warranty'} subtitle={`${[w.brand, w.model].filter(Boolean).join(' ')} · until ${formatDate(w.warrantyEndDate)}`} onPress={() => router.push({ pathname: '/warranty/[id]', params: { id: w.id } })} />)}
+        {warranties.map((w) => <Row key={w.id} icon={<IconTile icon={<ShieldCheck size={17} color={p.blue} />} tone="blue" />} title={w.itemType || w.equipmentType || 'Warranty'} subtitle={`${[w.brand, w.model].filter(Boolean).join(' ')} · until ${formatDate(w.warrantyEndDate || w.expiryDate)}`} onPress={() => router.push({ pathname: '/warranty/[id]', params: { id: w.id } })} />)}
         {can('warranties.create') && !isCustomer ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Add warranty card" action chevron={false} onPress={() => router.push({ pathname: '/warranty-form', params: { projectId: x.id, customerId: x.customerId } })} /> : null}
       </Section>
       <Section header={`Service tickets · ${tickets.length}`}>

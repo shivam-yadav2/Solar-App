@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Platform, TextInput, TextInputProps, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Alert, Platform, TextInput, TextInputProps, View } from 'react-native';
+import { useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/build/react-navigation/core';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { ChevronDown, CalendarDays } from 'lucide-react-native';
 import { space, type, useTheme } from './theme';
@@ -148,3 +150,26 @@ export const num = (v: string | number | undefined | null) => {
   return Number.isFinite(n) ? n : 0;
 };
 export const todayISO = () => toISODate(new Date());
+
+/** Protect an edited form from an accidental back gesture or header back tap. */
+export function useUnsavedChanges(dirty: boolean) {
+  const navigation = useNavigation();
+  const allowRef = useRef(false);
+  usePreventRemove(dirty, ({ data }) => {
+    if (allowRef.current) {
+      allowRef.current = false;
+      navigation.dispatch(data.action);
+      return;
+    }
+    const discard = () => navigation.dispatch(data.action);
+    if (Platform.OS === 'web' && typeof globalThis.confirm === 'function') {
+      if (globalThis.confirm('Discard your unsaved changes?')) discard();
+      return;
+    }
+    Alert.alert('Discard changes?', 'Your unsaved changes will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: discard },
+    ]);
+  });
+  return useCallback(() => { allowRef.current = true; }, []);
+}

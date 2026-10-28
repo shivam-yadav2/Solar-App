@@ -3,8 +3,9 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity, Bell, BookOpen, Boxes, Building2, Calculator, ClipboardList, CreditCard, FileClock, FileText, FolderOpen, Gauge, HardHat, IndianRupee, Inbox, KeyRound,
-  LifeBuoy, LogOut, MessageSquareHeart, PieChart, ReceiptText, Search, Settings, ShieldCheck, ShieldOff, Smartphone, Target, Trash2, UserCog, Users, Wallet, Wrench, Zap, FileBarChart,
+  Bell, Boxes, Building2, ClipboardList, CreditCard, FileClock, FileText, FolderOpen, Gauge, HardHat, IndianRupee, KeyRound,
+  LogOut, MessageSquareHeart, PieChart, ReceiptText, Search, Settings, ShieldCheck, Target, Users, Wallet, Wrench, Zap, FileBarChart, Calculator,
+  LifeBuoy, CircleHelp, Trash2, UserX, Database, Smartphone, Megaphone, FlaskConical, Shield, BarChart3,
 } from 'lucide-react-native';
 import { useAuth } from '../../src/context/AuthContext';
 import { useCanOpen } from '../../src/lib/access';
@@ -29,33 +30,43 @@ export default function MoreTab() {
 
   const sections: { title: string; items: (Item | false)[] }[] = isCustomer ? [
     { title: 'My solar', items: [
+      { label: 'Payments & receipts', icon: CreditCard, tone: 'green', path: '/(tabs)/payments' },
       { label: 'Invoices & receipts', icon: ReceiptText, tone: 'accent', path: '/invoices' },
       { label: 'Warranty cards', icon: ShieldCheck, tone: 'green', path: '/warranties' },
       { label: 'Service requests', icon: Wrench, tone: 'red', path: '/tickets' },
       { label: 'Documents', icon: FolderOpen, tone: 'purple', path: '/documents' },
     ] },
     { title: 'More', items: [
-      { label: 'Loan EMI calculator', icon: Calculator, tone: 'blue', path: '/emi' },
       { label: 'Rate your installation', icon: MessageSquareHeart, tone: 'orange', path: '/feedback' },
       { label: 'Notifications', icon: Bell, tone: 'gray', path: '/notifications' },
+      { label: 'Privacy requests', icon: UserX, tone: 'purple', path: '/privacy', subtitle: 'Request a data copy or deletion' },
+      { label: 'SolarOS support', icon: LifeBuoy, tone: 'blue', path: '/support' },
+      { label: 'Help & workflows', icon: CircleHelp, tone: 'accent', path: '/help' },
+      { label: 'Loan EMI calculator', icon: Calculator, tone: 'orange', path: '/emi' },
     ] },
   ] : isPlatform ? [
     { title: 'Companies', items: [
       platformTabAllowed(role, 'saas_control') && { label: 'Companies', icon: Building2, tone: 'accent', path: '/tenants' },
-      platformTabAllowed(role, 'saas_usage') && { label: 'Usage', icon: Activity, tone: 'purple', path: '/platform/usage' },
       platformTabAllowed(role, 'saas_plans') && { label: 'Plans', icon: Wallet, tone: 'teal', path: '/plans' },
-      platformTabAllowed(role, 'saas_enquiries') && { label: 'Enquiries', icon: Inbox, tone: 'blue', path: '/platform/enquiries' },
+      platformTabAllowed(role, 'saas_usage') && { label: 'Usage & adoption', icon: BarChart3, tone: 'blue', path: '/platform/usage' },
+      platformTabAllowed(role, 'saas_enquiries') && { label: 'Sales enquiries', icon: Target, tone: 'orange', path: '/platform/enquiries' },
+      platformTabAllowed(role, 'saas_users') && { label: 'Platform users', icon: Users, tone: 'purple', path: '/platform/users' },
     ] },
-    { title: 'Money & support', items: [
-      platformTabAllowed(role, 'saas_billing') && { label: 'Billing', icon: CreditCard, tone: 'green', path: '/platform/billing' },
-      platformTabAllowed(role, 'saas_support') && { label: 'Support inbox', icon: LifeBuoy, tone: 'red', path: '/platform/support' },
+    { title: 'Operations', items: [
+      platformTabAllowed(role, 'saas_billing') && { label: 'Platform billing', icon: CreditCard, tone: 'green', path: '/platform/billing' },
+      platformTabAllowed(role, 'saas_support') && { label: 'Support desk', icon: LifeBuoy, tone: 'blue', path: '/platform/support' },
+      platformTabAllowed(role, 'saas_demos') && { label: 'Demo workspaces', icon: FlaskConical, tone: 'purple', path: '/platform/demos' },
+      platformTabAllowed(role, 'saas_communication') && { label: 'Communication', icon: Megaphone, tone: 'orange', path: '/platform/communication' },
     ] },
     { title: 'Platform', items: [
-      platformTabAllowed(role, 'saas_users') && { label: 'Users', icon: UserCog, tone: 'blue', path: '/platform/users' },
       platformTabAllowed(role, 'saas_audit') && { label: 'Activity & security', icon: FileClock, tone: 'gray', path: '/platform-audit' },
       platformTabAllowed(role, 'saas_search') && { label: 'Search everything', icon: Search, tone: 'purple', path: '/platform-search' },
       platformTabAllowed(role, 'saas_health') && { label: 'System health', icon: Gauge, tone: 'orange', path: '/system-health' },
-      { label: 'Other settings on the web', icon: Smartphone, tone: 'gray', path: '/web-only', subtitle: 'Communication, platform settings, data & backups, API, mobile app' },
+      platformTabAllowed(role, 'saas_security') && { label: 'Platform security', icon: Shield, tone: 'green', path: '/platform/security' },
+      platformTabAllowed(role, 'saas_data') && { label: 'Data & recovery', icon: Database, tone: 'purple', path: '/platform/data' },
+      platformTabAllowed(role, 'saas_mobile') && { label: 'Mobile app control', icon: Smartphone, tone: 'blue', path: '/platform/mobile' },
+      platformTabAllowed(role, 'saas_api') && { label: 'Website login & API', icon: KeyRound, tone: 'accent', path: '/platform/api-access' },
+      platformTabAllowed(role, 'saas_settings') && { label: 'Platform settings', icon: Settings, tone: 'gray', path: '/platform/settings' },
     ] },
   ] : [
     { title: 'Sales', items: [
@@ -76,21 +87,21 @@ export default function MoreTab() {
       canOpen('expenses') && { label: 'Expenses', icon: ClipboardList, tone: 'orange', path: '/expenses', badge: can('financials.approve') ? pendingExp : 0 },
       canOpen('payroll') && { label: 'Payroll', icon: IndianRupee, tone: 'green', path: '/payroll' },
       canOpen('profit') && { label: 'Profit & margins', icon: PieChart, tone: 'purple', path: '/profit' },
+      { label: 'Loan EMI calculator', icon: Calculator, tone: 'accent', path: '/emi' },
       canOpen('reports') && { label: 'Reports & export', icon: FileBarChart, tone: 'blue', path: '/reports' },
     ] },
     { title: 'Company', items: [
       canOpen('team') && { label: 'Team', icon: Users, tone: 'blue', path: '/team' },
       canOpen('roles') && { label: 'Roles & permissions', icon: KeyRound, tone: 'purple', path: '/roles' },
       canOpen('activity') && { label: 'Audit log', icon: FileClock, tone: 'gray', path: '/audit-logs' },
-      { label: 'Company settings', icon: Settings, tone: 'gray', path: '/settings' },
+      can('settings.view') && { label: 'Company settings', icon: Settings, tone: 'gray', path: '/settings' },
       can('customers.delete') && { label: 'Recycle bin', icon: Trash2, tone: 'red', path: '/recycle-bin' },
-      can('customers.delete') && { label: 'Privacy requests', icon: ShieldOff, tone: 'teal', path: '/privacy' },
+      can('customers.delete') && { label: 'Privacy requests', icon: UserX, tone: 'purple', path: '/privacy' },
       user?.role === 'ADMIN' && { label: 'SolarOS plan & billing', icon: CreditCard, tone: 'green', path: '/billing' },
     ] },
-    { title: 'Help', items: [
-      { label: 'SolarOS support', icon: LifeBuoy, tone: 'red', path: '/support' },
-      { label: 'Help guide', icon: BookOpen, tone: 'blue', path: '/help' },
-      { label: 'Loan EMI calculator', icon: Calculator, tone: 'teal', path: '/emi' },
+    { title: 'Support', items: [
+      { label: 'SolarOS support', icon: LifeBuoy, tone: 'blue', path: '/support', subtitle: 'Open and track a support ticket' },
+      { label: 'Help & workflows', icon: CircleHelp, tone: 'accent', path: '/help' },
     ] },
   ];
 

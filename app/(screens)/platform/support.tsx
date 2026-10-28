@@ -1,0 +1,13 @@
+import React, { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { LifeBuoy } from 'lucide-react-native';
+import { platform } from '../../../src/lib/apis/platform';
+import { useFetch } from '../../../src/hooks/useFetch';
+import { formatDateTime } from '../../../src/lib/formatters';
+import type { SupportTicket } from '../../../src/types';
+import { Badge, EmptyState, ErrorState, GroupedItem, ListScreen, ListSkeleton, Row, SearchBar, Segmented, StatGrid, StatTile, useTheme } from '../../../src/ds';
+
+export default function PlatformSupport() {
+  const router = useRouter(); const p = useTheme(); const state = useFetch(() => platform.supportTickets()); const [search, setSearch] = useState(''); const [status, setStatus] = useState('open'); const all = state.data?.tickets || []; const items = useMemo(() => all.filter((x) => (!search || `${x.number} ${x.subject} ${x.tenantName}`.toLowerCase().includes(search.toLowerCase())) && (status === 'all' || x.status === status)), [all, search, status]); const c = state.data?.counts;
+  return <ListScreen<SupportTicket> title="Support desk" subtitle="Company conversations and internal notes" back header={<><StatGrid><StatTile label="Open" value={c?.open || 0} tone="blue" /><StatTile label="Urgent" value={c?.urgent || 0} tone="red" /><StatTile label="Waiting" value={c?.waiting || 0} tone="orange" /><StatTile label="Unassigned" value={c?.unassigned || 0} tone="purple" /></StatGrid><SearchBar value={search} onChange={setSearch} placeholder="Ticket, company or subject" /><Segmented value={status} onChange={setStatus} options={[{ value: 'open', label: 'Open' }, { value: 'waiting_on_customer', label: 'Waiting' }, { value: 'resolved', label: 'Resolved' }, { value: 'all', label: 'All' }]} />{state.isLoading ? <ListSkeleton avatar={false} /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : null}</>} data={state.isLoading || state.error ? [] : items} keyExtractor={(x) => x.id} refreshing={state.isRefreshing} onRefresh={state.refresh} ListEmptyComponent={!state.isLoading && !state.error ? <EmptyState icon={<LifeBuoy size={44} color={p.tertiary} />} title="Queue is clear" /> : null} renderItem={({ item, index }) => <GroupedItem index={index} count={items.length}><Row title={item.subject} subtitle={`${item.number} · ${item.tenantName} · ${formatDateTime(item.lastReplyAt)}`} accessory={<Badge text={item.priority === 'urgent' ? 'Urgent' : item.status.replaceAll('_', ' ')} tone={item.priority === 'urgent' ? 'red' : undefined} />} onPress={() => router.push({ pathname: '/platform/support/[id]', params: { id: item.id } })} /></GroupedItem>} />;
+}

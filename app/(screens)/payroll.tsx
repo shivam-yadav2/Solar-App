@@ -1,34 +1,112 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Banknote, Download, IndianRupee, Plus, UsersRound } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { formatINR } from '../../src/lib/formatters';
-import { Badge, Card, EmptyState, ErrorState, FormField, HeaderButton, Loading, Screen, StatCard } from '../../src/components/ui';
+import { toPage, usePaged } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
+import { formatDate, formatINR } from '../../src/lib/formatters';
+import { payslipHtml, sharePdf } from '../../src/lib/docs';
 import { shareCsv } from '../../src/lib/export';
+import { Badge, Button, Chips, EmptyState, ErrorState, FormSection, GroupedItem, GUTTER, IconButton, IconTile, InfoRow, ListScreen, ListSkeleton, Row, SearchBar, Section, Segmented, Sheet, T, TextField, formatMoneyCompact, haptic, space, useOverlay, useTheme } from '../../src/ds';
+import { LoadMoreFooter } from '../../src/components/kit';
 
-const tabs = ['Payroll', 'Employees', 'Advances'] as const;
-function Segments({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return <View className="mb-3 flex-row rounded-xl bg-slate-100 p-1">{tabs.map(tab => <Pressable key={tab} onPress={() => onChange(tab)} className={`flex-1 rounded-lg px-2 py-2.5 ${value === tab ? 'bg-white' : ''}`}><Text className={`text-center text-xs font-bold ${value === tab ? 'text-slate-900' : 'text-slate-500'}`}>{tab}</Text></Pressable>)}</View>;
-}
+type Mode = 'payroll' | 'employees' | 'advances';
 
 export default function PayrollScreen() {
-  const router = useRouter(); const { hasPermission } = useAuth(); const [tab, setTab] = useState('Payroll'); const [query, setQuery] = useState(''); const [status, setStatus] = useState('All');
-  const state = useFetch(async () => { const [payroll, employees, advances] = await Promise.all([api.getPayrollRecords({ limit: '100' }), api.getEmployees({ limit: '100' }), api.getSalaryAdvances({ limit: '100' })]); return { payroll, employees, advances }; });
-  const records = state.data?.payroll.records ?? []; const employees = state.data?.employees.employees ?? []; const advances = state.data?.advances.advances ?? []; const summary = state.data?.payroll.summary;
-  const filteredRecords = useMemo(() => records.filter(item => `${item.employeeName} ${item.employeeCustomId} ${item.month}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All' || item.status === status)), [records, query, status]);
-  const remove = (kind: 'employee' | 'record', id: string, label: string) => Alert.alert(`Delete ${kind}?`, label, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { if (kind === 'employee') await api.deleteEmployee(id); else await api.deletePayrollRecord(id); await state.reload(); } catch (e: any) { Alert.alert('Delete failed', e.message); } } }]);
-  const runBatch = () => { const month = new Date().toISOString().slice(0, 7); Alert.alert('Run batch payroll?', `Generate payroll for ${month} for all active employees.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Run', onPress: async () => { try { await api.runBatchPayroll(month); await state.reload(); } catch (e: any) { Alert.alert('Batch payroll failed', e.message); } } }]); };
-  const markPaid = (item: any) => Alert.alert('Mark payroll paid?', `${item.employeeName} · ${item.month}`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Mark Paid', onPress: async () => { try { await api.updatePayrollRecord(item.id, { status: 'Paid', paymentDate: new Date().toISOString().slice(0, 10), paymentMethod: 'Bank Transfer' }); await state.reload(); } catch (e: any) { Alert.alert('Could not settle payroll', e.message); } } }]);
-  const exportPayroll = async () => { try { await shareCsv('SolarOS_Payroll', filteredRecords.map(item => ({ Employee: item.employeeName, Month: item.month, Gross: item.grossSalary, Deductions: item.totalDeductions, Net: item.netSalary, Status: item.status }))); } catch (e: any) { Alert.alert('Export failed', e.message); } };
-  return <Screen title="Staff Payroll" subtitle="Employees, salaries and settlements" onBack={() => router.back()} action={<View className="flex-row gap-2"><HeaderButton label="Export" onPress={() => void exportPayroll()} /><HeaderButton label="Run" onPress={runBatch} /></View>} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <>
-      <View className="flex-row gap-3"><View className="flex-1"><StatCard label="Employees" value={String(employees.length)} /></View><View className="flex-1"><StatCard label="Net Payroll" value={formatINR(summary?.totalNet)} accent="text-blue-700" /></View></View>
-      <Segments value={tab} onChange={setTab} />
-      {tab === 'Payroll' ? <><FormField label="Search payroll" value={query} onChangeText={setQuery} placeholder="Employee, ID or month" /><View className="mt-2 flex-row gap-2">{['All', 'Pending', 'Processing', 'Paid'].map(item => <Pressable key={item} onPress={() => setStatus(item)} className={`rounded-full border px-3 py-1.5 ${status === item ? 'border-blue-600 bg-blue-50' : 'border-slate-200'}`}><Text className={`text-[11px] font-bold ${status === item ? 'text-blue-700' : 'text-slate-500'}`}>{item}</Text></Pressable>)}</View>{filteredRecords.length === 0 ? <EmptyState message="No payroll records match this filter." /> : filteredRecords.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.employeeName}</Text><Text className="mt-1 text-xs text-slate-500">{item.employeeRole} · {item.department} · {item.month}</Text></View><Badge text={item.status} tone={item.status === 'Paid' ? 'green' : 'amber'} /></View><View className="mt-3 flex-row border-t border-slate-100 pt-3"><View className="flex-1"><Text className="text-[10px] text-slate-400">GROSS</Text><Text className="text-xs font-bold">{formatINR(item.grossSalary)}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">DEDUCTIONS</Text><Text className="text-xs font-bold text-rose-600">{formatINR(item.totalDeductions)}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">NET</Text><Text className="text-xs font-bold text-emerald-700">{formatINR(item.netSalary)}</Text></View></View><View className="mt-3 flex-row justify-end gap-4">{hasPermission('payroll.manage') && item.status !== 'Paid' ? <Pressable onPress={() => markPaid(item)}><Text className="text-xs font-bold text-emerald-700">Mark paid</Text></Pressable> : null}{hasPermission('payroll.manage') ? <Pressable onPress={() => remove('record', item.id, `${item.employeeName} · ${item.month}`)}><Text className="text-xs font-bold text-rose-600">Delete</Text></Pressable> : null}</View></Card>)}</> : null}
-      {tab === 'Employees' ? <><View className="mb-2 items-end"><HeaderButton label="Add Employee" onPress={() => router.push('/employee-form')} /></View>{employees.length === 0 ? <EmptyState message="No employees yet." /> : employees.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.name}</Text><Text className="mt-1 text-xs text-slate-500">{item.role} · {item.department} · {item.customId}</Text></View><Badge text={item.status} tone={item.status === 'Active' ? 'green' : 'slate'} /></View><Text className="mt-3 text-sm font-bold text-slate-800">{formatINR(item.baseSalary)} base salary</Text>{hasPermission('payroll.manage') ? <View className="mt-3 flex-row justify-end gap-4"><Pressable onPress={() => router.push({ pathname: '/employee-form', params: { id: item.id } })}><Text className="text-xs font-bold text-blue-700">Edit</Text></Pressable><Pressable onPress={() => remove('employee', item.id, item.name)}><Text className="text-xs font-bold text-rose-600">Delete</Text></Pressable></View> : null}</Card>)}</> : null}
-      {tab === 'Advances' ? <><View className="mb-2 items-end"><HeaderButton label="Grant Advance" onPress={() => router.push('/salary-advance-form')} /></View>{advances.length === 0 ? <EmptyState message="No salary advances recorded." /> : advances.map(item => <Pressable key={item.id} onPress={() => router.push({ pathname: '/salary-advance-form', params: { id: item.id } })}><Card><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.employeeName}</Text><Text className="mt-1 text-xs text-slate-500">Recovery {item.recoveryMonth} · {item.reason}</Text></View><Badge text={item.isRecovered ? 'Recovered' : 'Pending'} tone={item.isRecovered ? 'green' : 'amber'} /></View><Text className="mt-3 text-lg font-bold text-amber-700">{formatINR(item.amount)}</Text></Card></Pressable>)}</> : null}
-    </>}
-  </Screen>;
+  const router = useRouter();
+  const p = useTheme();
+  const { tenant, hasPermission: can } = useAuth();
+  const { toast, actions } = useOverlay();
+  const [mode, setMode] = useState<Mode>('payroll');
+  const [text, setText] = useState(''); const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('All');
+  const [recovered, setRecovered] = useState('all');
+  const [summary, setSummary] = useState<any>({});
+  const [selected, setSelected] = useState<any | null>(null);
+
+  const payroll = usePaged<any>(['payroll', 'records', search, status], async (page, limit) => {
+    const result: any = await api.getPayrollRecords({ page: String(page), limit: String(limit), search, status });
+    if (page === 1) setSummary(result.summary || {});
+    return toPage(result.records, result, page);
+  }, 30, { enabled: mode === 'payroll' });
+  const employees = usePaged<any>(['payroll', 'employees', search, status], async (page, limit) => {
+    const result: any = await api.getEmployees({ page: String(page), limit: String(limit), search, status });
+    return toPage(result.employees, result, page);
+  }, 30, { enabled: mode === 'employees' });
+  const advances = usePaged<any>(['payroll', 'advances', recovered], async (page, limit) => {
+    const result: any = await api.getSalaryAdvances({ page: String(page), limit: String(limit), ...(recovered === 'all' ? {} : { isRecovered: recovered }) });
+    return toPage(result.advances, result, page);
+  }, 30, { enabled: mode === 'advances' });
+  const list = mode === 'payroll' ? payroll : mode === 'employees' ? employees : advances;
+
+  const refresh = async () => { await list.refresh(); };
+  const runBatch = () => {
+    const month = new Date().toISOString().slice(0, 7);
+    actions({ title: `Run payroll for ${month}?`, message: 'This creates one pending payroll record for each active employee without an existing record.', items: [{ label: 'Run batch payroll', icon: <IndianRupee size={20} color={p.accentText} />, onPress: async () => {
+      try { const result = await api.runBatchPayroll(month); toast(result.message || 'Payroll created'); await payroll.refresh(); } catch (e: any) { toast(e.message || 'Batch payroll failed', 'error'); }
+    } }] });
+  };
+  const remove = (kind: 'record' | 'employee', item: any) => actions({ title: `Delete ${kind}?`, message: kind === 'record' ? `${item.employeeName} · ${item.month}` : item.name, items: [{ label: 'Delete permanently', destructive: true, onPress: async () => {
+    try { if (kind === 'record') await api.deletePayrollRecord(item.id); else await api.deleteEmployee(item.id); setSelected(null); toast('Deleted'); await (kind === 'record' ? payroll.refresh() : employees.refresh()); } catch (e: any) { toast(e.message || 'Could not delete', 'error'); }
+  } }] });
+  const settle = (item: any) => actions({ title: 'Mark salary paid?', message: `${item.employeeName} · ${formatINR(item.netSalary)}`, items: [{ label: 'Mark paid by bank transfer', onPress: async () => {
+    try { await api.updatePayrollRecord(item.id, { status: 'Paid', paymentDate: new Date().toISOString().slice(0, 10), paymentMethod: 'Bank Transfer' }); setSelected(null); haptic.success(); toast('Payroll marked paid'); await payroll.refresh(); } catch (e: any) { toast(e.message, 'error'); }
+  } }] });
+  const exportData = async () => {
+    try {
+      if (mode === 'payroll') await shareCsv('SolarOS_Payroll', payroll.items.map((item) => ({ Voucher: item.customId, Employee: item.employeeName, Month: item.month, Gross: item.grossSalary, Deductions: item.totalDeductions, Net: item.netSalary, Status: item.status })));
+      else if (mode === 'employees') await shareCsv('SolarOS_Employees', employees.items.map((item) => ({ ID: item.customId, Employee: item.name, Role: item.role, Department: item.department, BaseSalary: item.baseSalary, Status: item.status })));
+      else await shareCsv('SolarOS_Salary_Advances', advances.items.map((item) => ({ ID: item.customId, Employee: item.employeeName, Amount: item.amount, RecoveryMonth: item.recoveryMonth, Recovered: item.isRecovered ? 'Yes' : 'No' })));
+    } catch (e: any) { toast(e.message || 'Export failed', 'error'); }
+  };
+  const add = () => router.push(mode === 'payroll' ? '/payroll-record-form' : mode === 'employees' ? '/employee-form' : '/salary-advance-form');
+  const emptyTitle = mode === 'payroll' ? 'No payroll records' : mode === 'employees' ? 'No employees' : 'No salary advances';
+
+  return <>
+    <ListScreen<any>
+      title="Staff payroll" subtitle="Employees, salary runs, advances and payslips" back large={false}
+      right={can('payroll.manage') ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label={mode === 'payroll' ? 'New payroll' : mode === 'employees' ? 'Add employee' : 'Grant advance'} onPress={add} /> : undefined}
+      header={<>
+        <Segmented<Mode> value={mode} onChange={(value) => { setMode(value); setText(''); setSearch(''); setStatus('All'); }} options={[{ value: 'payroll', label: 'Payroll' }, { value: 'employees', label: 'People' }, { value: 'advances', label: 'Advances' }]} />
+        {mode === 'payroll' ? <View style={{ flexDirection: 'row', gap: space.m }}><View style={{ flex: 1 }}><Section><InfoRow label="Net payroll" value={<T variant="headline" num>{formatMoneyCompact(summary.totalNet || 0)}</T>} /></Section></View><View style={{ flex: 1 }}><Section><InfoRow label="Pending" value={<T variant="headline" num color="orange">{formatMoneyCompact(summary.totalPending || 0)}</T>} /></Section></View></View> : null}
+        {mode !== 'advances' ? <SearchBar value={text} onChange={setText} onSearch={setSearch} placeholder={mode === 'payroll' ? 'Employee, voucher or role' : 'Name, ID, phone or role'} /> : null}
+        {mode === 'payroll' ? <Chips value={status} onChange={setStatus} options={['All', 'Pending', 'Processing', 'Paid'].map((value) => ({ value, label: value }))} /> : null}
+        {mode === 'employees' ? <Chips value={status} onChange={setStatus} options={['All', 'Active', 'On Leave', 'Inactive', 'Terminated'].map((value) => ({ value, label: value }))} /> : null}
+        {mode === 'advances' ? <Chips value={recovered} onChange={setRecovered} options={[{ value: 'all', label: 'All' }, { value: 'false', label: 'Pending' }, { value: 'true', label: 'Recovered' }]} /> : null}
+        {can('payroll.manage') && mode === 'payroll' ? <View style={{ flexDirection: 'row', gap: space.s }}><Button title="Run this month" kind="gray" onPress={runBatch} style={{ flex: 1 }} /><Button title="Export" kind="gray" icon={<Download size={17} color={p.label} />} onPress={() => void exportData()} style={{ flex: 1 }} /></View> : <Button title="Export current list" kind="gray" icon={<Download size={17} color={p.label} />} onPress={() => void exportData()} full />}
+        {list.loading ? <ListSkeleton /> : list.error ? <ErrorState message={list.error} onRetry={list.refresh} /> : null}
+      </>}
+      data={list.loading || list.error ? [] : list.items}
+      keyExtractor={(item) => item.id}
+      refreshing={list.refreshing}
+      onRefresh={list.refresh}
+      onEndReached={list.loadMore}
+      onEndReachedThreshold={0.4}
+      ListEmptyComponent={!list.loading && !list.error ? <EmptyState icon={mode === 'employees' ? <UsersRound size={44} color={p.tertiary} /> : <Banknote size={44} color={p.tertiary} />} title={emptyTitle} action={can('payroll.manage') ? { title: mode === 'payroll' ? 'Create payroll' : mode === 'employees' ? 'Add employee' : 'Grant advance', onPress: add } : undefined} /> : null}
+      ListFooterComponent={<LoadMoreFooter loading={list.loadingMore} hasMore={list.hasMore} count={list.items.length} total={list.total} noun={mode} />}
+      renderItem={({ item, index }) => <GroupedItem index={index} count={list.items.length} inset={58}>
+        {mode === 'payroll' ? <Row icon={<IconTile icon={<IndianRupee size={17} color={item.status === 'Paid' ? p.green : p.orange} />} tone={item.status === 'Paid' ? 'green' : 'orange'} />} title={item.employeeName} subtitle={`${item.employeeRole} · ${item.month} · ${item.customId}`} accessory={<View style={{ alignItems: 'flex-end', gap: 2 }}><T variant="subhead" num weight="600">{formatINR(item.netSalary)}</T><Badge text={item.status} tone={item.status === 'Paid' ? 'green' : 'orange'} /></View>} onPress={() => setSelected(item)} /> : null}
+        {mode === 'employees' ? <Row icon={<IconTile icon={<UsersRound size={17} color={p.blue} />} tone="blue" />} title={item.name} subtitle={`${item.role} · ${item.department} · ${item.customId}`} accessory={<View style={{ alignItems: 'flex-end', gap: 2 }}><T variant="subhead" num>{formatINR(item.baseSalary)}</T><Badge text={item.status} tone={item.status === 'Active' ? 'green' : 'gray'} /></View>} onPress={() => can('payroll.manage') && router.push({ pathname: '/employee-form', params: { id: item.id } })} onLongPress={() => can('payroll.manage') && remove('employee', item)} /> : null}
+        {mode === 'advances' ? <Row icon={<IconTile icon={<Banknote size={17} color={item.isRecovered ? p.green : p.orange} />} tone={item.isRecovered ? 'green' : 'orange'} />} title={item.employeeName} subtitle={`${item.reason} · Recover ${item.recoveryMonth} · ${formatDate(item.disbursedDate)}`} accessory={<View style={{ alignItems: 'flex-end', gap: 2 }}><T variant="subhead" num weight="600">{formatINR(item.amount)}</T><Badge text={item.isRecovered ? 'Recovered' : 'Pending'} tone={item.isRecovered ? 'green' : 'orange'} /></View>} onPress={() => can('payroll.manage') && router.push({ pathname: '/salary-advance-form', params: { id: item.id } })} /> : null}
+      </GroupedItem>}
+    />
+    <Sheet visible={!!selected} onClose={() => setSelected(null)} title={selected?.employeeName || 'Payroll'}>
+      {selected ? <View style={{ paddingHorizontal: GUTTER, gap: space.m }}>
+        <Section header={`${selected.month} · ${selected.customId}`}>
+          <InfoRow label="Gross earnings" value={formatINR(selected.grossSalary)} />
+          <InfoRow label="Deductions" value={formatINR(selected.totalDeductions)} />
+          <InfoRow label="Net salary" value={<T variant="headline" num color="green">{formatINR(selected.netSalary)}</T>} />
+          <InfoRow label="Status" value={<Badge text={selected.status} tone={selected.status === 'Paid' ? 'green' : 'orange'} />} />
+          {selected.transactionRef ? <InfoRow label="Transaction" value={selected.transactionRef} /> : null}
+        </Section>
+        <Button title="Share payslip PDF" onPress={() => void sharePdf(payslipHtml(selected, tenant), `Payslip-${selected.employeeName}-${selected.month}.pdf`).catch((e) => toast(e.message, 'error'))} full />
+        {can('payroll.manage') ? <View style={{ flexDirection: 'row', gap: space.s }}>
+          <Button title="Edit" kind="gray" onPress={() => { setSelected(null); router.push({ pathname: '/payroll-record-form', params: { id: selected.id } }); }} style={{ flex: 1 }} />
+          {selected.status !== 'Paid' ? <Button title="Mark paid" kind="tinted" onPress={() => settle(selected)} style={{ flex: 1 }} /> : null}
+          <Button title="Delete" kind="destructive" onPress={() => remove('record', selected)} style={{ flex: 1 }} />
+        </View> : null}
+      </View> : null}
+    </Sheet>
+  </>;
 }

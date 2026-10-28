@@ -1,12 +1,61 @@
 import React from 'react';
-import { Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Linking, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { Database, ReceiptText } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
+import { account } from '../../src/lib/apis/account';
 import { useFetch } from '../../src/hooks/useFetch';
-import { Badge, Card, DetailRow, EmptyState, ErrorState, Loading, Screen, StatCard } from '../../src/components/ui';
 import { formatDate, formatINR } from '../../src/lib/formatters';
+import { Badge, Card, EmptyState, ErrorState, IconTile, InfoRow, Row, Screen, Section, Spinner, StatGrid, StatTile, T, useTheme } from '../../src/ds';
+
+const bytes = (n?: number | null) => {
+  if (!n) return '0 MB';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / 1024 ** i).toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
+};
 
 export default function BillingScreen() {
-  const router = useRouter(); const { tenantId } = useLocalSearchParams<{ tenantId?: string }>(); const state = useFetch(() => tenantId ? api.getTenantBilling(String(tenantId)) : api.getBilling(), [tenantId]); const sub = state.data?.subscription; const invoices = state.data?.invoices ?? []; const meters = state.data?.meters ?? [];
-  return <Screen title="Subscription Billing" subtitle="Plan, invoices, and usage limits" onBack={() => router.back()} refreshing={state.isRefreshing} onRefresh={state.refresh}>{state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <>{sub ? <><StatCard label="Recurring Amount" value={formatINR(sub.unitAmount)} hint={`per ${sub.billingInterval}`} accent="text-emerald-700" /><Card><View className="mb-2"><Badge text={sub.status} tone={sub.status === 'active' ? 'green' : sub.status === 'past_due' || sub.status === 'unpaid' ? 'rose' : 'amber'} /></View><DetailRow label="Plan" value={sub.planTier} /><DetailRow label="Period start" value={formatDate(sub.currentPeriodStart)} /><DetailRow label="Period end" value={formatDate(sub.currentPeriodEnd)} /><DetailRow label="Cancel at end" value={sub.cancelAtPeriodEnd ? 'Yes' : 'No'} /></Card></> : <EmptyState message="No gateway subscription record is configured for this tenant." />}<Text className="mb-2 mt-2 px-1 text-xs font-bold text-slate-500">USAGE METERS</Text>{meters.length === 0 ? <EmptyState message="No usage meters recorded." /> : meters.map(item => <Card key={item.id}><View className="flex-row justify-between"><Text className="text-sm font-bold text-slate-900">{item.metricKey}</Text><Text className="text-sm font-bold text-slate-700">{item.currentValue} / {item.maxLimit}</Text></View><View className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><View className="h-2 rounded-full bg-amber-500" style={{ width: `${Math.min(100, Math.max(2, item.maxLimit ? item.currentValue / item.maxLimit * 100 : 0))}%` }} /></View></Card>)}<Text className="mb-2 mt-2 px-1 text-xs font-bold text-slate-500">INVOICES</Text>{invoices.length === 0 ? <EmptyState message="No subscription invoices recorded." /> : invoices.map(item => <Card key={item.id}><View className="flex-row justify-between gap-3"><View><Text className="text-sm font-bold text-slate-900">{item.invoiceNumber}</Text><Text className="mt-1 text-xs text-slate-500">{formatDate(item.billingDate)}</Text></View><Badge text={item.status} tone={item.status === 'paid' ? 'green' : item.status === 'uncollectible' ? 'rose' : 'amber'} /></View><Text className="mt-3 text-lg font-bold text-slate-900">{formatINR(item.amountDue)}</Text></Card>)}</>}</Screen>;
+  const { tenantId } = useLocalSearchParams<{ tenantId?: string }>();
+  const p = useTheme();
+  const state = useFetch(async () => {
+    const core = tenantId ? await api.getTenantBilling(String(tenantId)) : await api.getBilling();
+    if (tenantId) return { core, publicInvoices: [] as any[], storage: null as any };
+    const [invoiceData, storage] = await Promise.all([
+      account.billingInvoices().catch(() => ({ invoices: [] })),
+      account.storageUsage().catch(() => null),
+    ]);
+    return { core, publicInvoices: invoiceData.invoices, storage };
+  }, [tenantId]);
+  const core: any = state.data?.core || {};
+  const sub = core.subscription;
+  const invoices = state.data?.publicInvoices?.length ? state.data.publicInvoices : (core.invoices || []);
+  const meters = core.meters || [];
+  const storage = state.data?.storage;
+  return <Screen title="Plan & billing" subtitle="Subscription, usage limits and SolarOS invoices" back refreshing={state.isRefreshing} onRefresh={state.refresh}>
+    {state.isLoading ? <Spinner /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : <>
+      {sub ? <>
+        <Card style={{ gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flex: 1 }}><T variant="title3">{sub.planTier || sub.planName || 'SolarOS plan'}</T><T variant="footnote" color="secondary">{formatINR(sub.unitAmount ?? sub.pricePerMonth)} per {sub.billingInterval || sub.billingCycle || 'month'}</T></View>
+            <Badge text={sub.status || 'active'} />
+          </View>
+        </Card>
+        <Section header="Current period"><InfoRow label="Starts" value={formatDate(sub.currentPeriodStart)} /><InfoRow label="Renews / ends" value={formatDate(sub.currentPeriodEnd)} /><InfoRow label="Auto renew" value={sub.cancelAtPeriodEnd || sub.autoRenew === false ? 'Off' : 'On'} /></Section>
+      </> : <EmptyState title="No gateway subscription" message="This workspace does not have a subscription record yet." />}
+      {storage ? <>
+        <StatGrid><StatTile label="Storage used" value={storage.usedBytes / 1024 / 1024} suffix=" MB" tone="blue" /><StatTile label="Files" value={storage.files} tone="purple" /></StatGrid>
+        <Card style={{ gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}><Database size={18} color={p.blue} /><T variant="headline">Document storage</T></View>
+          <View style={{ height: 8, borderRadius: 4, backgroundColor: p.fill, overflow: 'hidden' }}><View style={{ height: 8, backgroundColor: p.blue, width: `${storage.limitBytes ? Math.min(100, storage.usedBytes / storage.limitBytes * 100) : 5}%` }} /></View>
+          <T variant="footnote" color="secondary">{bytes(storage.usedBytes)} of {storage.limitBytes ? bytes(storage.limitBytes) : 'unlimited storage'}</T>
+        </Card>
+      </> : null}
+      {meters.length ? <Section header="Usage limits">{meters.map((item: any) => <View key={item.id || item.metricKey} style={{ padding: 16, gap: 7 }}><View style={{ flexDirection: 'row' }}><T variant="body" style={{ flex: 1 }}>{String(item.metricKey).replaceAll('_', ' ')}</T><T variant="body" num weight="600">{item.currentValue} / {item.maxLimit}</T></View><View style={{ height: 7, borderRadius: 4, backgroundColor: p.fill, overflow: 'hidden' }}><View style={{ height: 7, backgroundColor: item.currentValue >= item.maxLimit ? p.red : p.accent, width: `${Math.min(100, item.maxLimit ? item.currentValue / item.maxLimit * 100 : 0)}%` }} /></View></View>)}</Section> : null}
+      <Section header="SolarOS invoices">
+        {!invoices.length ? <View style={{ padding: 16 }}><T variant="body" color="secondary">No subscription invoices yet.</T></View> : invoices.map((item: any) => <Row key={item.id} icon={<IconTile tone="accent" icon={<ReceiptText size={17} color={p.accentText} />} />} title={item.invoiceNumber} subtitle={`${formatDate(item.issueDate || item.billingDate)} · Due ${formatDate(item.dueDate || item.periodEnd)}`} value={formatINR(item.total ?? item.amountDue)} accessory={<Badge text={item.status} />} onPress={item.publicToken ? () => void Linking.openURL(account.invoicePageUrl(item.publicToken)) : undefined} />)}
+      </Section>
+      <T variant="footnote" color="secondary" align="center">Billing records are read-only in the mobile app. Contact SolarOS support for plan changes or billing corrections.</T>
+    </>}
+  </Screen>;
 }

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, Pressable, PressableProps, StyleProp, Text, TextProps, TextStyle, View, ViewStyle } from 'react-native';
-import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSpring, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { elevation, fontFamily, Palette, radius, space, statusTone, Tone, toneColors, type, TypeVariant, useTheme } from './theme';
 
@@ -32,6 +32,8 @@ export const T: React.FC<TProps> = ({ variant = 'body', color = 'label', weight,
   return (
     <Text
       {...rest}
+      allowFontScaling={rest.allowFontScaling ?? true}
+      maxFontSizeMultiplier={rest.maxFontSizeMultiplier ?? 2}
       style={[type[variant], { color: c, fontFamily }, weight ? { fontWeight: weight } : null, align ? { textAlign: align } : null, num ? { fontVariant: ['tabular-nums'] } : null, style]}
     />
   );
@@ -48,13 +50,14 @@ export interface TapProps extends Omit<PressableProps, 'style'> {
 }
 const APressable = Animated.createAnimatedComponent(Pressable);
 export const Tap: React.FC<TapProps> = ({ style, scaleTo = 0.97, haptics = false, onPressIn, onPressOut, onPress, children, ...rest }) => {
+  const reduceMotion = useReducedMotion();
   const pressed = useSharedValue(0);
-  const a = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(pressed.value, [0, 1], [1, scaleTo]) }], opacity: interpolate(pressed.value, [0, 1], [1, 0.82]) }));
+  const a = useAnimatedStyle(() => reduceMotion ? ({ transform: [{ scale: 1 }], opacity: 1 }) : ({ transform: [{ scale: interpolate(pressed.value, [0, 1], [1, scaleTo]) }], opacity: interpolate(pressed.value, [0, 1], [1, 0.82]) }));
   return (
     <APressable
       {...rest}
-      onPressIn={(e) => { pressed.value = withSpring(1, { damping: 20, stiffness: 420 }); onPressIn?.(e); }}
-      onPressOut={(e) => { pressed.value = withSpring(0, { damping: 16, stiffness: 260 }); onPressOut?.(e); }}
+      onPressIn={(e) => { if (!reduceMotion) pressed.value = withSpring(1, { damping: 20, stiffness: 420 }); onPressIn?.(e); }}
+      onPressOut={(e) => { if (!reduceMotion) pressed.value = withSpring(0, { damping: 16, stiffness: 260 }); onPressOut?.(e); }}
       onPress={(e) => { if (haptics) haptic.tap(); onPress?.(e); }}
       style={[style, a]}
     >
@@ -80,7 +83,7 @@ export const Button: React.FC<{
   const p = useTheme();
   const bg = { filled: p.accent, tinted: p.accentSoft, gray: p.fill, plain: 'transparent', destructive: p.redSoft }[kind];
   const fg = { filled: p.onAccent, tinted: p.accentText, gray: p.label, plain: p.accentText, destructive: p.red }[kind];
-  const h = { l: 50, m: 40, s: 32 }[size];
+  const h = { l: 50, m: 44, s: 44 }[size];
   return (
     <Tap
       onPress={disabled || loading ? undefined : () => { haptic.light(); onPress?.(); }}
@@ -98,9 +101,10 @@ export const Button: React.FC<{
 /** Round icon button (header actions). */
 export const IconButton: React.FC<{ icon: React.ReactNode; onPress?: () => void; label: string; tinted?: boolean; size?: number }> = ({ icon, onPress, label, tinted, size = 36 }) => {
   const p = useTheme();
+  const target = Math.max(44, size);
   return (
     <Tap onPress={() => { haptic.tap(); onPress?.(); }} scaleTo={0.9} accessibilityRole="button" accessibilityLabel={label} hitSlop={8}
-      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: tinted ? p.accentSoft : p.fill }}>
+      style={{ width: target, height: target, borderRadius: target / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: tinted ? p.accentSoft : p.fill }}>
       {icon}
     </Tap>
   );
@@ -153,8 +157,9 @@ export const Divider: React.FC<{ inset?: number }> = ({ inset = 0 }) => {
 
 export const Skeleton: React.FC<{ width?: number | `${number}%`; height?: number; radius?: number; style?: StyleProp<ViewStyle> }> = ({ width = '100%', height = 14, radius: r = 6, style }) => {
   const p = useTheme();
+  const reduceMotion = useReducedMotion();
   const t = useSharedValue(0);
-  useEffect(() => { t.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true); }, [t]);
+  useEffect(() => { t.value = reduceMotion ? 0.7 : withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), -1, true); }, [reduceMotion, t]);
   const a = useAnimatedStyle(() => ({ opacity: interpolate(t.value, [0, 1], [0.45, 1]) }));
   return <Animated.View style={[{ width, height, borderRadius: r, backgroundColor: p.fill }, a, style]} />;
 };

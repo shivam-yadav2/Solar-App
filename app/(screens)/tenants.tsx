@@ -1,22 +1,25 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Building2, Plus } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useAuth } from '../../src/context/AuthContext';
 import { useFetch } from '../../src/hooks/useFetch';
-import { formatINR, formatNumber } from '../../src/lib/formatters';
-import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, Screen, SearchField } from '../../src/components/ui';
 import type { Tenant } from '../../src/types';
+import { formatINR, formatNumber } from '../../src/lib/formatters';
+import { Avatar, Badge, EmptyState, ErrorState, GroupedItem, IconButton, ListScreen, ListSkeleton, Row, SearchBar, Segmented, StatGrid, StatTile, T, useTheme } from '../../src/ds';
 
 export default function TenantsScreen() {
-  const router = useRouter(); const { switchTenantScope, impersonateTenant } = useAuth(); const [search, setSearch] = useState('');
-  const state = useFetch(() => api.getSaaSTenants({ search, limit: '100' }), [search]); const items: Tenant[] = state.data?.tenants ?? [];
-  const openTenant = (item: Tenant) => Alert.alert(item.name, 'Choose how to enter this workspace.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Super-admin scope', onPress: async () => { await switchTenantScope(item.id); router.replace('/(tabs)/dashboard'); } }, { text: 'Impersonate tenant admin', onPress: async () => { await impersonateTenant(item.id); router.replace('/(tabs)/dashboard'); } }]);
-  return <Screen title="Tenants" subtitle="Companies on the SolarOS platform" onBack={() => router.back()} action={<HeaderButton onPress={() => router.push('/tenant-form')} />} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    <SearchField value={search} onChangeText={setSearch} placeholder="Search tenant name or slug…" />
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : items.length === 0 ? <EmptyState message="No tenants found." /> : items.map(item => <Card key={item.id}>
-      <View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.name}</Text><Text className="text-xs text-slate-500 mt-1">{item.slug} · {item.adminEmail}</Text></View><Badge text={item.status} tone={item.status === 'active' ? 'green' : item.status === 'suspended' ? 'rose' : 'amber'} /></View>
-      <View className="flex-row mt-3 pt-3 border-t border-slate-100"><View className="flex-1"><Text className="text-[10px] text-slate-400">PLAN</Text><Text className="text-xs font-bold">{item.subscription?.planName || '—'}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">MRR</Text><Text className="text-xs font-bold text-emerald-700">{formatINR(item.subscription?.pricePerMonth)}</Text></View><View className="flex-1"><Text className="text-[10px] text-slate-400">CAPACITY</Text><Text className="text-xs font-bold">{formatNumber(item.stats?.totalCapacityKw)} kW</Text></View></View><View className="flex-row flex-wrap gap-2 mt-3"><Pressable onPress={() => openTenant(item)} className="flex-1 bg-slate-900 rounded-lg py-2 items-center"><Text className="text-xs font-semibold text-white">Open Workspace</Text></Pressable><Pressable onPress={() => router.push({ pathname: '/billing', params: { tenantId: item.id } })} className="px-4 border border-slate-200 rounded-lg py-2"><Text className="text-xs font-semibold text-slate-700">Billing</Text></Pressable><Pressable onPress={() => router.push({ pathname: '/tenant-form', params: { id: item.id } })} className="px-4 border border-slate-200 rounded-lg py-2"><Text className="text-xs font-semibold text-slate-700">Edit</Text></Pressable></View>
-    </Card>)}
-  </Screen>;
+  const router = useRouter(); const p = useTheme();
+  const [search, setSearch] = useState(''); const [status, setStatus] = useState('all');
+  const state = useFetch(() => api.getSaaSTenants({ search, limit: '250' }), [search]);
+  const all: Tenant[] = state.data?.tenants || [];
+  const items = useMemo(() => status === 'all' ? all : all.filter((x) => String(x.status).toLowerCase() === status), [all, status]);
+  const active = all.filter((x) => x.status === 'active').length;
+  const mrr = all.reduce((n, x) => n + Number(x.subscription?.pricePerMonth || 0), 0);
+  return <ListScreen<Tenant> title="Companies" subtitle="Subscriptions, access and workspace health" back
+    right={<IconButton tinted label="New company" icon={<Plus size={19} color={p.accentText} />} onPress={() => router.push('/tenant-form')} />}
+    header={<><StatGrid><StatTile label="Companies" value={all.length} tone="blue" /><StatTile label="Active" value={active} tone="green" /><StatTile label="MRR" value={mrr} format={formatINR} tone="accent" /></StatGrid><SearchBar value={search} onChange={setSearch} placeholder="Name, slug or owner" /><Segmented value={status} onChange={setStatus} options={[{ value: 'all', label: 'All' }, { value: 'active', label: 'Active' }, { value: 'trial', label: 'Trial' }, { value: 'suspended', label: 'Paused' }]} />{state.isLoading ? <ListSkeleton /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : null}</>}
+    data={state.isLoading || state.error ? [] : items} keyExtractor={(x) => x.id} refreshing={state.isRefreshing} onRefresh={state.refresh}
+    ListEmptyComponent={!state.isLoading && !state.error ? <EmptyState icon={<Building2 size={44} color={p.tertiary} />} title="No companies found" message="Try another filter or create the first workspace." /> : null}
+    renderItem={({ item, index }) => <GroupedItem index={index} count={items.length} inset={68}><Row icon={<Avatar name={item.name} />} title={item.name} subtitle={`${item.slug} · ${item.subscription?.planName || 'No plan'}`} accessory={<View style={{ alignItems: 'flex-end', gap: 3 }}><Badge text={item.status} /><T variant="caption" color="secondary" num>{formatINR(item.subscription?.pricePerMonth || 0)} · {formatNumber(item.stats?.totalCapacityKw || 0)} kW</T></View>} onPress={() => router.push({ pathname: '/tenant/[id]', params: { id: item.id } })} /></GroupedItem>} />;
 }

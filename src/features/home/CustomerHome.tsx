@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Calculator, FileText, MessageSquareHeart, ShieldCheck, Wrench, Zap } from 'lucide-react-native';
+import { Calculator, FileText, FolderOpen, IndianRupee, MessageSquareHeart, ShieldCheck, Wrench, Zap } from 'lucide-react-native';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/query';
 import { useAuth } from '../../context/AuthContext';
@@ -70,7 +70,9 @@ export function CustomerHome() {
             { label: 'Get help', icon: Wrench, tone: 'red', onPress: () => go('/ticket-form') },
             { label: 'Invoices', icon: FileText, tone: 'accent', onPress: () => go('/invoices') },
             { label: 'Warranty', icon: ShieldCheck, tone: 'green', onPress: () => go('/warranties') },
-            { label: 'Loan EMI', icon: Calculator, tone: 'blue', onPress: () => go('/emi') },
+            { label: 'Payments', icon: IndianRupee, tone: 'teal', onPress: () => go('/(tabs)/payments') },
+            { label: 'Documents', icon: FolderOpen, tone: 'blue', onPress: () => go('/documents') },
+            { label: 'EMI', icon: Calculator, tone: 'orange', onPress: () => go('/emi') },
           ]} />
 
           {(q.data?.payments || []).length ? (

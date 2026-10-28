@@ -92,6 +92,7 @@ export function documentHtml(kind: DocKind, data: any, tenant: Tenant | null): s
     const inter = gst?.supplyType === 'INTER_STATE';
     const supply = gst?.placeOfSupply || data.state || '';
     const specs = [data.capacityKw ? `${data.capacityKw} KW` : '', data.panelBrand ? `Panels: ${data.panelBrand} ${data.panelModel || ''}` : '', data.inverterBrand ? `Inverter: ${data.inverterBrand} ${data.inverterModel || ''}` : ''].filter(Boolean).join(' • ');
+    const panelSerials = Array.isArray(data.panelSerialNumbers) ? data.panelSerialNumbers.filter(Boolean) : [];
     const sum = (k: string) => lines.reduce((s: number, l: any) => s + Number(l[k] || 0), 0);
     const bp = (tenant as any)?.businessProfile || {};
     body = `
@@ -108,6 +109,7 @@ export function documentHtml(kind: DocKind, data: any, tenant: Tenant | null): s
       <table class="tax"><thead><tr><th>HSN / SAC</th><th class="r">Taxable value</th><th class="r">CGST</th><th class="r">SGST</th><th class="r">IGST</th><th class="r">Total tax</th></tr></thead>
         <tbody>${lines.map((l: any) => `<tr><td class="mono">${esc(l.hsnSacCode || hsn)}</td><td class="r">${money(l.taxableValue)}</td><td class="r">${l.cgstRate ? `${l.cgstRate}% / ` : ''}${money(l.cgstAmount)}</td><td class="r">${l.sgstRate ? `${l.sgstRate}% / ` : ''}${money(l.sgstAmount)}</td><td class="r">${l.igstRate ? `${l.igstRate}% / ` : ''}${money(l.igstAmount)}</td><td class="r"><b>${money(Number(l.cgstAmount || 0) + Number(l.sgstAmount || 0) + Number(l.igstAmount || 0))}</b></td></tr>`).join('')}</tbody>
         <tfoot><tr><td class="r">Total</td><td class="r">${money(sum('taxableValue'))}</td><td class="r">${money(sum('cgstAmount'))}</td><td class="r">${money(sum('sgstAmount'))}</td><td class="r">${money(sum('igstAmount'))}</td><td class="r">${money(sum('cgstAmount') + sum('sgstAmount') + sum('igstAmount'))}</td></tr></tfoot></table>
+      ${panelSerials.length || data.inverterSerial ? `<div class="bank"><b>Issued equipment serial numbers</b>${panelSerials.length ? `<p class="muted"><b>Solar modules:</b> ${panelSerials.map(esc).join(', ')}</p>` : ''}${data.inverterSerial ? `<p class="muted"><b>Inverter:</b> ${esc(data.inverterSerial)}</p>` : ''}</div>` : ''}
       ${bp.bankName || bp.bankAccountNumber ? `<div class="bank"><b>Bank details for RTGS/NEFT:</b><p class="muted">Bank: ${esc(bp.bankName || '—')} | A/C name: ${esc(bp.legalEntityName || tenant?.name || '')} | A/C no: ${esc(bp.bankAccountNumber || '—')} | IFSC: ${esc(bp.bankIfsc || '—')}</p></div>` : ''}`;
   } else if (kind === 'warranty') {
     body = `
@@ -145,6 +147,24 @@ export async function sharePdf(html: string, fileName: string): Promise<void> {
   if (Platform.OS === 'web') { await Print.printAsync({ html }); return; }
   const { uri } = await makePdf(html);
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: fileName });
+}
+
+/** Native payroll PDF. Kept separate from customer documents because it contains confidential staff data. */
+export function payslipHtml(record: any, tenant: Tenant | null): string {
+  const company = tenant?.name || 'Company';
+  const profile = (tenant as any)?.businessProfile || {};
+  const month = record.month ? new Date(`${record.month}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) : '';
+  const row = (label: string, value: unknown) => `<tr><td>${esc(label)}</td><td class="r mono">${money(value)}</td></tr>`;
+  return `<!doctype html><html><head><meta charset="utf-8"/><style>${CSS}
+    .payhead{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:3px solid #f59e0b}.payhead h1{font-size:20px;margin:0}.paytitle{text-align:right}.net{margin-top:14px;background:#0f172a;color:#fff;border-radius:8px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}.twocol table{margin-top:0}.employee{padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  </style></head><body><div class="page">
+    <div class="payhead"><div><h1>${esc(company)}</h1><p class="muted">${esc([profile.address, profile.city, profile.state, profile.pincode].filter(Boolean).join(', '))}</p></div><div class="paytitle"><b>SALARY SLIP</b><p>${esc(month)}</p><p class="mono">${esc(record.customId)}</p></div></div>
+    <div class="body"><div class="employee"><p><span class="lbl">Employee</span><br/><b>${esc(record.employeeName)}</b> (${esc(record.employeeCustomId)})</p><p><span class="lbl">Designation</span><br/>${esc(record.employeeRole)} · ${esc(record.department)}</p><p><span class="lbl">Status</span><br/><b>${esc(record.status)}</b></p><p><span class="lbl">Disbursal</span><br/>${esc(record.paymentDate ? formatDate(record.paymentDate) : 'Pending')} · ${esc(record.paymentMethod || 'Bank Transfer')}</p></div>
+    <div class="twocol"><table><thead><tr><th>Earnings</th><th class="r">Amount</th></tr></thead><tbody>${row('Basic salary', record.baseSalary)}${row('HRA', record.hra)}${row('Site allowance', record.siteAllowance)}${row('Project commission', record.projectCommission)}${row('Bonus', record.bonus)}</tbody><tfoot><tr><td>Gross earnings</td><td class="r mono">${money(record.grossSalary)}</td></tr></tfoot></table>
+    <table><thead><tr><th>Deductions</th><th class="r">Amount</th></tr></thead><tbody>${row('Provident fund', record.providentFund)}${row('Professional tax', record.professionalTax)}${row('TDS', record.tds)}${row('Advance recovery', record.advanceDeduction)}${row('Leave / LOP', record.leaveDeductions)}</tbody><tfoot><tr><td>Total deductions</td><td class="r mono">${money(record.totalDeductions)}</td></tr></tfoot></table></div>
+    <div class="net"><div><b>NET TAKE-HOME SALARY</b><p style="color:#cbd5e1">Gross earnings less deductions</p></div><b class="mono" style="font-size:22px">${money(record.netSalary)}</b></div>
+    ${record.transactionRef ? `<div class="bank"><b>Transaction reference:</b> <span class="mono">${esc(record.transactionRef)}</span></div>` : ''}${record.paymentNotes ? `<div class="bank"><b>Finance notes:</b> ${esc(record.paymentNotes)}</div>` : ''}
+    </div>${footer(tenant, '#0f172a', '#f59e0b')}</div></body></html>`;
 }
 
 /** Quotation PDF: the web's QuotationDocument (same four templates), rendered to static HTML. */

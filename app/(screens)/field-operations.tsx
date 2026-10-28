@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -10,10 +10,11 @@ import { useAuth } from '../../src/context/AuthContext';
 import { loadProjects } from '../../src/lib/pickers';
 import { formatDate } from '../../src/lib/formatters';
 import {
-  Avatar, Badge, Button, EmptyState, ErrorState, FormSection, GroupedItem, GUTTER, IconButton, IconTile, ListScreen, ListSkeleton, Row, Segmented, SelectField, Sheet, space, T, ToggleField,
+  Avatar, Badge, Button, EmptyState, ErrorState, FormSection, GroupedItem, GUTTER, IconButton, IconTile, ListScreen, ListSkeleton, Row, Section, Segmented, SelectField, Sheet, space, T, ToggleField,
   useOverlay, useTheme, haptic, radius, elevation,
 } from '../../src/ds';
 import { LoadMoreFooter } from '../../src/components/kit';
+import { flushQueuedDprs, queuedDprCount } from '../../src/lib/offlineDpr';
 
 type Mode = 'today' | 'reports';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -25,6 +26,8 @@ export default function FieldOperations() {
   const { hasPermission: can } = useAuth();
   const [mode, setMode] = useState<Mode>('today');
   const [punch, setPunch] = useState<any | null>(null);
+  const [queued, setQueued] = useState(0);
+  const { toast } = useOverlay();
   const emps = useApi(['payroll', 'employees', 'active'], () => api.getEmployees({ limit: '500', status: 'Active' }), { enabled: mode === 'today' });
   const att = useApi(['attendance', today().slice(0, 7)], () => api.getAttendance(today().slice(0, 7)), { enabled: mode === 'today' });
   const reports = usePaged<any>(['dpr', 'all'], async (page, limit) => { const r = await field.reports({ page, limit }); return toPage(r.reports, r, page); }, 30, { enabled: mode === 'reports' });
@@ -32,10 +35,17 @@ export default function FieldOperations() {
   const employees: any[] = emps.data?.employees || [];
   const present = employees.filter((e) => todays.has(e.id)).length;
   const manage = can('attendance.manage');
+  const retryQueue = async () => {
+    const result = await flushQueuedDprs(); setQueued(result.remaining);
+    if (result.sent) { toast(`${result.sent} queued report${result.sent === 1 ? '' : 's'} sent`); void reports.refresh(); }
+    else if (result.remaining) toast('Still offline. Reports remain safely queued.', 'info');
+  };
+  useEffect(() => { queuedDprCount().then(setQueued); void retryQueue(); /* once when this workspace opens */ /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const header = (
     <>
       <Segmented<Mode> value={mode} onChange={setMode} options={[{ value: 'today', label: 'Attendance today' }, { value: 'reports', label: 'Site reports' }]} />
+      {queued ? <Section><Row icon={<IconTile icon={<HardHat size={17} color={p.orange} />} tone="orange" />} title={`${queued} site report${queued === 1 ? '' : 's'} waiting to send`} subtitle="Saved on this device. Tap to retry now." action onPress={() => void retryQueue()} /></Section> : null}
       {mode === 'today' && employees.length ? (
         <View style={[{ backgroundColor: p.surface, borderRadius: radius.l, padding: space.l, flexDirection: 'row' }, elevation(p, 1)]}>
           <View style={{ flex: 1 }}><T variant="footnote" color="secondary">On duty</T><T variant="title2" num color="green">{present}</T></View>

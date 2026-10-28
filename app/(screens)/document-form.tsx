@@ -1,15 +1,57 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, Text } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { formatFileSize } from '../../src/lib/formatters';
-import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+import { loadProjects } from '../../src/lib/pickers';
+import { AttachField, Attached } from '../../src/components/AttachField';
+import { Button, FormSection, Screen, SelectField, TextField, haptic, useOverlay, useUnsavedChanges } from '../../src/ds';
+import type { ProjectDocumentCategory } from '../../src/types';
+
+const CATEGORIES: ProjectDocumentCategory[] = ['Agreement', 'Quotation', 'Installation Report', 'Site Survey', 'UPPCL Document', 'Net Metering', 'Completion Certificate', 'Payment Receipt', 'Other'];
 
 export default function DocumentFormScreen() {
-  const router = useRouter(); const [projects, setProjects] = useState<any[]>([]); const [form, setForm] = useState<any>({ projectId: '', name: '', category: 'Other' }); const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
-  useEffect(() => { api.getProjects({ limit: '100' }).then(data => setProjects(data.projects)).catch(e => setError(e.message)).finally(() => setLoading(false)); }, []); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const pick = async () => { const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, type: '*/*' }); if (!result.canceled) { const asset = result.assets[0]; setFile(asset); if (!form.name) setForm((current: any) => ({ ...current, name: asset.name.replace(/\.[^.]+$/, '') })); } };
-  const save = async () => { if (!form.projectId || !form.name.trim() || !file) { Alert.alert('Missing details', 'Project, document name, and a file are required.'); return; } setSaving(true); try { const uploaded = await api.uploadFile({ uri: file.uri, name: file.name, mimeType: file.mimeType }); await api.createDocument({ ...form, fileId: uploaded.fileId, fileName: uploaded.fileName, fileSize: uploaded.fileSize, fileMime: uploaded.mimeType }); router.back(); } catch (e: any) { Alert.alert('Could not upload document', e.message); } finally { setSaving(false); } };
-  return <Screen title="Upload Document" subtitle="Attach a project file or certificate" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <Card><OptionField label="Project *" value={form.projectId} onChange={set('projectId')} options={projects.map(item => ({ value: item.id, label: `${item.projectName} · ${item.customId}` }))} /><FormField label="Document name" value={form.name} onChangeText={set('name')} required /><ChoiceField label="Category" value={form.category} options={['Agreement', 'Quotation', 'Installation Report', 'Site Survey', 'UPPCL Document', 'Net Metering', 'Completion Certificate', 'Payment Receipt', 'Other']} onChange={set('category')} /><Pressable onPress={() => void pick()} className="border border-dashed border-slate-300 bg-slate-50 rounded-xl p-4 mb-4 items-center"><Text className="text-sm font-semibold text-slate-700">{file ? file.name : 'Choose File'}</Text>{file?.size ? <Text className="text-xs text-slate-400 mt-1">{formatFileSize(file.size)}</Text> : null}</Pressable><PrimaryButton label={saving ? 'Uploading…' : 'Upload Document'} onPress={() => void save()} disabled={saving} /></Card>}</Screen>;
+  const router = useRouter();
+  const { toast } = useOverlay();
+  const [project, setProject] = useState<{ value: string; label: string } | null>(null);
+  const [customerId, setCustomerId] = useState('');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState<ProjectDocumentCategory>('Other');
+  const [file, setFile] = useState<Attached | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const dirty = !!project || !!name || !!file || category !== 'Other';
+  const allowLeave = useUnsavedChanges(dirty && !saving);
+  const save = async () => {
+    const next: Record<string, string> = {};
+    if (!project) next.project = 'Choose the project.';
+    if (!name.trim()) next.name = 'Give this document a clear name.';
+    if (!file) next.file = 'Add a photo or file.';
+    setErrors(next);
+    if (Object.keys(next).length || !project || !file) { haptic.error(); return; }
+    setSaving(true);
+    try {
+      await api.createDocument({ projectId: project.value, customerId, name: name.trim(), category, fileId: file.fileId, fileName: file.fileName, fileSize: file.fileSize, fileMime: file.mimeType || 'application/octet-stream' });
+      toast('Document uploaded');
+      allowLeave();
+      router.back();
+    } catch (e: any) { toast(e.message || 'Could not save this document', 'error'); } finally { setSaving(false); }
+  };
+  return (
+    <Screen title="Upload document" subtitle="Take a photo or attach an existing project file" large={false} back backLabel="Cancel" right={<Button title="Upload" size="s" loading={saving} onPress={save} />}>
+      <FormSection header="Project">
+        <SelectField label="Project" required value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" error={errors.project}
+          onChange={async (option) => {
+            setProject(option);
+            if (!option) { setCustomerId(''); return; }
+            const r = await api.getProject(option.value).catch(() => null);
+            setCustomerId(r?.project?.customerId || '');
+          }} />
+      </FormSection>
+      <FormSection header="Document">
+        <TextField label="Document name" value={name} onChange={setName} placeholder="e.g. Net meter approval" required error={errors.name} />
+        <SelectField label="Category" value={category} options={CATEGORIES.map((value) => ({ value, label: value }))} onChange={(option) => option && setCategory(option.value as ProjectDocumentCategory)} />
+        <AttachField label="Photo or file" value={file} onChange={(value) => { setFile(value); if (value && !name) setName(value.fileName.replace(/\.[^.]+$/, '')); }} hint={errors.file || 'PDF, image, Word document or any supported project file.'} />
+      </FormSection>
+      <Button title="Upload document" loading={saving} onPress={save} full />
+    </Screen>
+  );
 }

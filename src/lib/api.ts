@@ -43,6 +43,7 @@ import {
 } from './session';
 import { invalidateFor } from './query';
 import { noteResponse } from './serverState';
+import { recordClientEvent } from './diagnostics';
 
 /**
  * Unlike the web app (where the Express server serves the SPA and the API
@@ -63,6 +64,7 @@ export interface NativeUploadFile {
   uri: string;
   name: string;
   mimeType?: string;
+  size?: number;
 }
 
 export class ApiError extends Error {
@@ -73,11 +75,11 @@ export class ApiError extends Error {
   }
 }
 
-function getAuthHeader(): Record<string, string> {
+export function getAuthHeaders(includeJson = true): Record<string, string> {
   const token = getToken();
   const activeTenantId = getActiveTenantId();
   return {
-    'Content-Type': 'application/json',
+    ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
     'x-app-version': APP_VERSION,
     'x-app-platform': APP_PLATFORM,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -86,21 +88,29 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase();
   const headers = {
-    ...getAuthHeader(),
+    ...getAuthHeaders(),
     ...((options.headers as Record<string, string>) || {}),
+    'x-client-request-id': `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   };
 
   let response: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    response = await fetch(`${getApiBase()}${url}`, { ...options, headers });
-  } catch {
+    response = await fetch(`${getApiBase()}${url}`, { ...options, headers, signal: controller.signal });
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    await recordClientEvent({ kind: timedOut ? 'timeout' : 'network', route: url, method });
     // Native fetch throws on unreachable host — surface something actionable
     // instead of a bare "Network request failed".
     throw new ApiError(
-      `Cannot reach the server at ${getApiBase()}. Check that the backend is running and that apiBaseUrl in app.json points at it.`,
+      timedOut ? 'The server took too long to respond. Check your connection and try again.' : 'SolarOS could not reach the server. Check your connection and try again.',
       0
     );
+  } finally {
+    clearTimeout(timer);
   }
 
   if (response.status === 401) {
@@ -117,6 +127,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   if (response.status === 426) markUpdateRequired({ message: (data as any).error, updateUrl: (data as any).updateUrl });
 
   if (!response.ok) {
+    await recordClientEvent({ kind: 'api', route: url, method, status: response.status, message: String((data as any).error || '').slice(0, 160) });
     throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status);
   }
 
@@ -259,16 +270,11 @@ export const api = {
   uploadFile: async (file: NativeUploadFile) => {
     const formData = new FormData();
     formData.append('file', { uri: file.uri, name: file.name, type: file.mimeType || 'application/octet-stream' } as any);
-    const token = getToken(); const activeTenantId = getActiveTenantId();
     let response: Response;
     try {
       response = await fetch(`${getApiBase()}/files/upload`, {
         method: 'POST',
-        headers: {
-          'x-app-version': APP_VERSION,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(activeTenantId ? { 'x-tenant-id': activeTenantId } : {}),
-        },
+        headers: getAuthHeaders(false),
         body: formData,
       });
     } catch {
@@ -311,7 +317,8 @@ export const api = {
   updateSettings: (data: Partial<CompanySettings>) =>
     request<{ settings: CompanySettings }>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   getActivityLogs: (params: Record<string, string> = {}) =>
-    request<{ logs: ActivityLog[] }>(`/activity-logs${qs(params)}`),
+    request<{ logs: ActivityLog[]; total: number; page: number; totalPages: number }>(`/activity-logs${qs(params)}`),
+  getActivityLogFacets: () => request<{ actions: string[]; users: { id: string; name: string }[]; categories: string[]; summary: Record<string, number> }>('/activity-logs/facets'),
   getNotifications: () => request<{ notifications: import('../types').Notification[]; unreadCount: number }>('/notifications'),
   markNotificationRead: (id: string) => request<{ success: boolean }>(`/notifications/${id}/read`, { method: 'PUT' }),
   markAllNotificationsRead: () => request<{ success: boolean }>('/notifications/read-all', { method: 'PUT' }),
@@ -327,6 +334,14 @@ export const api = {
     request<{ user: User; tempPassword: string }>('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateStaffUser: (id: string, data: Partial<User> & { roleId?: string }) =>
     request<{ user: User }>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  resetStaffPassword: (id: string) =>
+    request<{ success: boolean; tempPassword: string; username: string; email: string; notified?: unknown }>(`/users/${id}/reset-password`, { method: 'POST' }),
+  signOutStaffEverywhere: (id: string) =>
+    request<{ success: boolean; revoked: number }>(`/users/${id}/sign-out-everywhere`, { method: 'POST' }),
+  resetStaffMfa: (id: string) => request<{ success: boolean }>(`/users/${id}/reset-mfa`, { method: 'POST' }),
+  getCompanyProfile: () => request<{ name: string; branding: Tenant['branding']; businessProfile: Tenant['businessProfile']; canEdit: boolean }>('/settings/company-profile'),
+  updateCompanyProfile: (data: { name?: string; branding?: Partial<Tenant['branding']>; businessProfile?: Partial<Tenant['businessProfile']> }) =>
+    request<{ name: string; branding: Tenant['branding']; businessProfile: Tenant['businessProfile'] }>('/settings/company-profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   // ---- SaaS control plane (SUPER_ADMIN) ----
   getSaaSTenants: (params: Record<string, string> = {}) =>

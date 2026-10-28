@@ -38,6 +38,7 @@ export const ContactBar: React.FC<{ phone?: string; email?: string; address?: st
     <View style={{ flexDirection: 'row', gap: space.s }}>
       {items.map(({ label, icon: Icon, on, ok }) => (
         <Tap key={label} onPress={ok ? () => { haptic.light(); on(); } : undefined} scaleTo={0.94}
+          accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !ok }}
           style={{ flex: 1, backgroundColor: p.surface, borderRadius: radius.m, paddingVertical: 10, alignItems: 'center', gap: 4, opacity: ok ? 1 : 0.4 }}>
           <Icon size={20} color={p.accentText} />
           <T variant="caption" style={{ color: p.accentText }} weight="500">{label}</T>
@@ -65,7 +66,7 @@ export const HeaderActions: React.FC = () => {
           </View>
         ) : null}
       </View>
-      <Tap onPress={() => router.push('/account')} scaleTo={0.9} accessibilityLabel="Your account" hitSlop={6}>
+      <Tap onPress={() => router.push('/account')} scaleTo={0.9} accessibilityRole="button" accessibilityLabel="Your account" hitSlop={6}>
         <Avatar name={user?.username || user?.email || '?'} size={34} />
       </Tap>
     </View>
@@ -89,6 +90,7 @@ export const QuickActions: React.FC<{ items: QuickAction[] }> = ({ items }) => {
             return (
               <View key={label} style={{ flex: 1 }}>
                 <Tap onPress={() => { haptic.light(); onPress(); }} scaleTo={0.94}
+                  accessibilityRole="button" accessibilityLabel={label}
                   style={[{ backgroundColor: p.surface, borderRadius: radius.l, paddingVertical: space.m, alignItems: 'center', gap: 6 }, elevation(p, 1)]}>
                   <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon size={20} color={c.fg} /></View>
                   <T variant="caption" weight="500" align="center" numberOfLines={1} style={{ paddingHorizontal: 2 }}>{label}</T>

@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import { api } from '../../src/lib/api';
+import { api, ApiError } from '../../src/lib/api';
 import { loadProjects } from '../../src/lib/pickers';
 import { Button, DateField, FormSection, Screen, SelectField, space, T, Tap, TextField, ToggleField, haptic, num, todayISO, useOverlay, useTheme, radius } from '../../src/ds';
 import { PhotosField, Attached } from '../../src/components/AttachField';
+import { store } from '../../src/lib/storage';
+import { queueDpr } from '../../src/lib/offlineDpr';
 
 const STEPS = [0, 25, 50, 75, 100];
 
@@ -40,6 +42,35 @@ export default function SiteReportForm() {
   const [photos, setPhotos] = useState<Attached[]>([]);
   const [gps, setGps] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const draftKey = `draft:dpr:${params.projectId || 'new'}`;
+
+  useEffect(() => {
+    store.get(draftKey).then((raw) => {
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        if (d.project) setProject(d.project);
+        if (d.date) setDate(d.date);
+        if (d.pct) setPct(d.pct);
+        setLabour(d.labour || ''); setWork(d.work || ''); setBlockers(d.blockers || ''); setWeather(d.weather || '');
+        if (Array.isArray(d.photos)) setPhotos(d.photos);
+        if (typeof d.gps === 'boolean') setGps(d.gps);
+        toast('Saved site-report draft restored', 'info');
+      } catch { void store.del(draftKey); }
+    }).finally(() => setHydrated(true));
+  // The draft key is fixed for this mounted form.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || saving) return;
+    const timer = setTimeout(() => {
+      const hasWork = !!project || !!work || !!blockers || !!photos.length || !!labour;
+      if (hasWork) void store.set(draftKey, JSON.stringify({ project, date, pct, labour, work, blockers, weather, photos, gps, savedAt: new Date().toISOString() }));
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [hydrated, saving, draftKey, project, date, pct, labour, work, blockers, weather, photos, gps]);
 
   useEffect(() => {
     if (!params.projectId) return;
@@ -57,15 +88,28 @@ export default function SiteReportForm() {
         const perm = await Location.requestForegroundPermissionsAsync().catch(() => null);
         if (perm?.granted) coords = (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null))?.coords || null;
       }
-      await api.createDpr(project.value, {
+      const payload = {
         reportDate: date, structureMountingProgressPct: pct.structure, panelInstallationProgressPct: pct.panels, wiringInverterProgressPct: pct.wiring,
         laborCountOnSite: num(labour), workCompletedToday: work.trim(), blockersOrDelays: blockers.trim() || undefined, weatherConditions: weather.trim() || undefined,
         gpsLatitude: coords?.latitude, gpsLongitude: coords?.longitude, sitePhotos: photos.map((x) => x.fileId),
-      });
+      };
+      await api.createDpr(project.value, payload);
+      await store.del(draftKey);
       haptic.success();
       toast('Site report sent');
       router.back();
-    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+    } catch (e: any) {
+      if (e instanceof ApiError && e.status === 0 && project) {
+        const count = await queueDpr(project.value, {
+          reportDate: date, structureMountingProgressPct: pct.structure, panelInstallationProgressPct: pct.panels, wiringInverterProgressPct: pct.wiring,
+          laborCountOnSite: num(labour), workCompletedToday: work.trim(), blockersOrDelays: blockers.trim() || undefined, weatherConditions: weather.trim() || undefined,
+          sitePhotos: photos.map((x) => x.fileId),
+        });
+        await store.del(draftKey);
+        toast(`Offline: report queued (${count} waiting)`, 'info');
+        router.back();
+      } else toast(e.message, 'error');
+    } finally { setSaving(false); }
   };
 
   return (
@@ -89,6 +133,7 @@ export default function SiteReportForm() {
         <PhotosField label="Site photos" value={photos} onChange={setPhotos} />
         <ToggleField label="Attach my location" value={gps} onChange={setGps} />
       </FormSection>
+      <T variant="caption" color="secondary" align="center">This report is saved as a private draft on this device until it is sent successfully.</T>
       <Button title="Send report" loading={saving} onPress={save} full />
     </Screen>
   );

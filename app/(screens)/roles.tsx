@@ -1,17 +1,20 @@
 import React from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { KeyRound, Plus, Trash2 } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
 import { useFetch } from '../../src/hooks/useFetch';
-import { Badge, Card, EmptyState, ErrorState, HeaderButton, Loading, Screen } from '../../src/components/ui';
+import { Badge, EmptyState, ErrorState, GroupedItem, IconButton, IconTile, ListScreen, ListSkeleton, Row, T, useTheme } from '../../src/ds';
 
 export default function RolesScreen() {
-  const router = useRouter(); const state = useFetch(async () => { const [roles, permissions] = await Promise.all([api.getRoles(), api.getPermissions()]); return { roles: roles.roles, permissions: permissions.permissions }; }); const roles = state.data?.roles ?? [];
-  const remove = (item: any) => Alert.alert('Delete role?', item.name, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { try { await api.deleteRole(item.id); await state.reload(); } catch (e: any) { Alert.alert('Could not delete role', e.message); } } }]);
-  return <Screen title="Roles & Permissions" subtitle={`${state.data?.permissions.length ?? 0} available permissions`} onBack={() => router.back()} action={<HeaderButton onPress={() => router.push('/role-form')} />} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : roles.length === 0 ? <EmptyState message="No roles configured." /> : roles.map(item => <Card key={item.id}>
-      <Pressable onPress={() => router.push({ pathname: '/role-form', params: { id: item.id } })}><View className="flex-row justify-between gap-3"><View className="flex-1"><Text className="text-sm font-bold text-slate-900">{item.name}</Text>{item.description ? <Text className="text-xs text-slate-500 mt-1">{item.description}</Text> : null}</View>{item.isSystem ? <Badge text="System" tone="amber" /> : null}</View><Text className="text-xs text-slate-600 mt-3">{item.permissionKeys.length} permissions · {item.userCount ?? 0} users</Text></Pressable>
-      {!item.isSystem && !(item.userCount ?? 0) ? <Pressable onPress={() => remove(item)} className="mt-3 self-end"><Text className="text-xs font-semibold text-rose-600">Delete</Text></Pressable> : null}
-    </Card>)}
-  </Screen>;
+  const router = useRouter(); const p = useTheme();
+  const state = useFetch(async () => { const [r, permissions] = await Promise.all([api.getRoles(), api.getPermissions()]); return { roles: r.roles, permissions: permissions.permissions }; });
+  const roles = state.data?.roles || [];
+  const remove = (item: any) => Alert.alert('Delete this role?', `“${item.name}” will be removed permanently.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete role', style: 'destructive', onPress: async () => { try { await api.deleteRole(item.id); await state.reload(); } catch (e: any) { Alert.alert('Could not delete role', e.message); } } }]);
+  return <ListScreen<any> title="Roles & permissions" subtitle={`${state.data?.permissions.length || 0} fine-grained permissions available`} back right={<IconButton tinted label="Create role" icon={<Plus size={18} color={p.accentText} />} onPress={() => router.push('/role-form')} />}
+    header={state.isLoading ? <ListSkeleton avatar={false} /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : null}
+    data={state.isLoading || state.error ? [] : roles} keyExtractor={(x) => x.id} refreshing={state.isRefreshing} onRefresh={state.refresh}
+    ListEmptyComponent={!state.isLoading && !state.error ? <EmptyState icon={<KeyRound size={44} color={p.tertiary} />} title="No roles" message="Create a role and grant only the access needed for that job." /> : null}
+    renderItem={({ item, index }) => <GroupedItem index={index} count={roles.length} inset={58}><Row icon={<IconTile tone={item.isSystem ? 'accent' : 'purple'} icon={<KeyRound size={17} color={item.isSystem ? p.accentText : p.purple} />} />} title={item.name} subtitle={item.description || `${item.permissionKeys.length} permissions`} accessory={<View style={{ alignItems: 'flex-end', gap: 3 }}>{item.isSystem ? <Badge text="System" tone="accent" /> : <T variant="caption" color="secondary">{item.userCount || 0} members</T>}</View>} onPress={item.canEdit === false ? undefined : () => router.push({ pathname: '/role-form', params: { id: item.id } })} onLongPress={!item.isSystem && !(item.userCount || 0) ? () => remove(item) : undefined} /></GroupedItem>}
+  />;
 }

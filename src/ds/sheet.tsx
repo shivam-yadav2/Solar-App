@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { AccessibilityInfo, Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -19,20 +19,21 @@ const SPRING = { damping: 26, stiffness: 260, mass: 0.9 };
 export function Sheet({ visible, onClose, title, children, right, footer, full }: { visible: boolean; onClose: () => void; title?: string; children: React.ReactNode; right?: React.ReactNode; footer?: React.ReactNode; full?: boolean }) {
   const p = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [mounted, setMounted] = useState(visible);
   const y = useSharedValue(H);
   const fade = useSharedValue(0);
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      y.value = H;
-      requestAnimationFrame(() => { y.value = withSpring(0, SPRING); fade.value = withTiming(1, { duration: 220 }); });
+      if (reduceMotion) { y.value = 0; fade.value = 1; }
+      else { y.value = H; requestAnimationFrame(() => { y.value = withSpring(0, SPRING); fade.value = withTiming(1, { duration: 220 }); }); }
     } else if (mounted) {
-      fade.value = withTiming(0, { duration: 180 });
-      y.value = withTiming(H, { duration: 240 }, (done) => { if (done) runOnJS(setMounted)(false); });
+      if (reduceMotion) { fade.value = 0; y.value = H; setMounted(false); }
+      else { fade.value = withTiming(0, { duration: 180 }); y.value = withTiming(H, { duration: 240 }, (done) => { if (done) runOnJS(setMounted)(false); }); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, reduceMotion]);
   const close = useCallback(() => onClose(), [onClose]);
   const pan = Gesture.Pan()
     .onChange((e) => { y.value = Math.max(0, y.value + e.changeY); })
@@ -47,10 +48,10 @@ export function Sheet({ visible, onClose, title, children, right, footer, full }
     <Modal transparent visible animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={close}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: p.overlay }, backdrop]}>
-          <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel="Close" />
+          <Pressable style={{ flex: 1 }} onPress={close} accessibilityRole="button" accessibilityLabel="Close sheet" />
         </Animated.View>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
-          <Animated.View style={[{ backgroundColor: p.dark ? '#1C1C1E' : p.bg, borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: H * 0.92, height: full ? H * 0.92 : undefined, paddingBottom: Math.max(insets.bottom, space.m) }, panel]}>
+          <Animated.View accessibilityViewIsModal accessibilityLabel={title || 'Sheet'} style={[{ backgroundColor: p.dark ? '#1C1C1E' : p.bg, borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: H * 0.92, height: full ? H * 0.92 : undefined, paddingBottom: Math.max(insets.bottom, space.m) }, panel]}>
             <GestureDetector gesture={pan}>
               <View style={{ paddingTop: 6, paddingBottom: title ? 4 : 10 }}>
                 <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: p.tertiary }} />
@@ -133,6 +134,7 @@ export const useOverlay = () => useContext(OverlayCtx);
 export function OverlayProvider({ children }: { children: React.ReactNode }) {
   const p = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(null);
   const [sheet, setSheet] = useState<{ title?: string; message?: string; items: ActionItem[] } | null>(null);
   const ty = useSharedValue(-140);
@@ -140,10 +142,11 @@ export function OverlayProvider({ children }: { children: React.ReactNode }) {
   const show = useCallback((message: string, kind: ToastKind = 'success') => {
     if (kind === 'success') haptic.success(); else if (kind === 'error') haptic.error();
     setToast({ id: Date.now(), message, kind });
-    ty.value = withSpring(0, { damping: 18, stiffness: 220 });
+    AccessibilityInfo.announceForAccessibility(message);
+    ty.value = reduceMotion ? 0 : withSpring(0, { damping: 18, stiffness: 220 });
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => { ty.value = withTiming(-140, { duration: 260 }); }, kind === 'error' ? 4200 : 2400);
-  }, [ty]);
+    timer.current = setTimeout(() => { ty.value = reduceMotion ? -140 : withTiming(-140, { duration: 260 }); }, kind === 'error' ? 4200 : 2400);
+  }, [reduceMotion, ty]);
   const ts = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }] }));
   const Icon = toast?.kind === 'error' ? CircleAlert : toast?.kind === 'info' ? Info : CheckCircle2;
   const color = toast?.kind === 'error' ? p.red : toast?.kind === 'info' ? p.blue : p.green;
@@ -164,6 +167,7 @@ export function OverlayProvider({ children }: { children: React.ReactNode }) {
           <View style={{ backgroundColor: p.surface, borderRadius: radius.m + 2, overflow: 'hidden' }}>
             {sheet?.items.map((a, i) => (
               <Tap key={a.label} scaleTo={0.985} onPress={() => { setSheet(null); setTimeout(a.onPress, Platform.OS === 'ios' ? 280 : 120); }}
+                accessibilityRole="button" accessibilityLabel={a.label}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: space.l, paddingVertical: 14, borderTopWidth: i ? StyleSheet.hairlineWidth : 0, borderTopColor: p.separator }}>
                 {a.icon}
                 <T variant="body" style={{ color: a.destructive ? p.red : p.label }}>{a.label}</T>

@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
 import { useAuth } from '../../src/context/AuthContext';
-import { Button, ChoiceField, ErrorState, FormSection, ListSkeleton, Screen, T, TextField, ToggleField, haptic, useOverlay } from '../../src/ds';
+import { Button, ChoiceField, ErrorState, FormSection, ListSkeleton, Screen, T, TextField, ToggleField, haptic, useOverlay, useUnsavedChanges } from '../../src/ds';
 import { CredentialsSheet, Credentials } from '../../src/components/CredentialsSheet';
 import type { CustomerStatus } from '../../src/types';
 
@@ -23,11 +23,18 @@ export default function CustomerForm() {
   const [saving, setSaving] = useState(false);
   const [creds, setCreds] = useState<Credentials | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  const baseline = useRef(JSON.stringify(blank));
 
   useEffect(() => {
     if (!id) return;
-    api.getCustomer(id).then(({ customer }) => setForm({ ...blank, ...customer, notes: customer.notes || '' })).catch((e) => setLoadError(e.message)).finally(() => setLoading(false));
+    api.getCustomer(id).then(({ customer }) => {
+      const next = { ...blank, ...customer, notes: customer.notes || '' };
+      setForm(next);
+      baseline.current = JSON.stringify(next);
+    }).catch((e) => setLoadError(e.message)).finally(() => setLoading(false));
   }, [id]);
+  const dirty = useMemo(() => !loading && JSON.stringify(form) !== baseline.current, [form, loading]);
+  const allowNavigation = useUnsavedChanges(dirty);
   const set = <K extends keyof Form>(k: K) => (v: Form[K]) => { setForm((f) => ({ ...f, [k]: v })); setErrors((e) => ({ ...e, [k]: undefined })); };
 
   const validate = () => {
@@ -49,10 +56,12 @@ export default function CustomerForm() {
       if (editing) {
         await api.updateCustomer(id!, body);
         toast('Saved');
+        allowNavigation();
         router.back();
       } else {
         const r = await api.createCustomer(body);
         toast('Customer added');
+        allowNavigation();
         if (r.tempPassword) {
           setCreatedId(r.customer.id);
           setCreds({ name: r.customer.name, login: r.customer.email, password: r.tempPassword, phone: r.customer.mobile, company: tenant?.name, notified: r.notified });

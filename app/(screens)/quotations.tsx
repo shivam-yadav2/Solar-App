@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FileText, Plus } from 'lucide-react-native';
+import { FileText, Plus, SlidersHorizontal } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
 import { usePaged, toPage } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
@@ -24,7 +24,7 @@ export default function QuotationsScreen() {
   return (
     <ListScreen<Quotation>
       title="Quotations" back large={false}
-      right={can('quotations.manage') ? <IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New quotation" onPress={() => router.push('/quotation-form')} /> : undefined}
+      right={can('quotations.manage') ? <View style={{ flexDirection: 'row', gap: 6 }}><IconButton icon={<SlidersHorizontal size={18} color={p.label} />} label="Quotation defaults" onPress={() => router.push('/quotation-settings')} /><IconButton tinted icon={<Plus size={18} color={p.accentText} strokeWidth={2.6} />} label="New quotation" onPress={() => router.push('/quotation-form')} /></View> : undefined}
       header={<>
         <SearchBar value={text} onChange={setText} onSearch={setQ} placeholder="Customer, phone or quotation no." />
         <Chips value={status} onChange={setStatus} options={['all', 'Draft', 'Sent', 'Viewed', 'Accepted', 'Rejected', 'Expired'].map((s) => ({ value: s, label: s === 'all' ? 'All' : s }))} />

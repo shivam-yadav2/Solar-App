@@ -1,17 +1,24 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
+import { Building2, CreditCard, FileText, KeyRound, LockKeyhole, ReceiptText, RotateCcw, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
+import { useAuth } from '../../src/context/AuthContext';
 import { useFetch } from '../../src/hooks/useFetch';
-import { Card, DetailRow, ErrorState, HeaderButton, Loading, Screen } from '../../src/components/ui';
+import { ErrorState, IconTile, InfoRow, Row, Screen, Section, Spinner, useTheme } from '../../src/ds';
 
 export default function SettingsScreen() {
-  const router = useRouter(); const state = useFetch(() => api.getSettings()); const item = state.data?.settings;
-  return <Screen title="Settings" subtitle="Company profile and defaults" onBack={() => router.back()} action={<HeaderButton label="Edit" onPress={() => router.push('/settings-form')} />} refreshing={state.isRefreshing} onRefresh={state.refresh}>
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : item ? <>
-      <Card><DetailRow label="Company" value={item.companyName} /><DetailRow label="Tagline" value={item.tagline} /><DetailRow label="Email" value={item.email} /><DetailRow label="Phone" value={item.phone} /><DetailRow label="Website" value={item.website} /></Card>
-      <Card><DetailRow label="Address" value={[item.address, item.city, item.state, item.pincode].filter(Boolean).join(', ')} /><DetailRow label="GST Number" value={item.gstNumber} /><DetailRow label="Currency" value={item.defaultCurrency} /><DetailRow label="Warranty alerts" value={`${item.warrantyExpiryAlertDays} days`} /></Card>
-      <Card><DetailRow label="GST invoicing" value={item.gstSettings?.enabled ? 'Enabled' : 'Disabled'} /><DetailRow label="Registration" value={item.gstSettings?.registrationType} /><DetailRow label="GST state code" value={item.gstSettings?.stateCode} /><DetailRow label="HSN / SAC" value={item.gstSettings?.defaultHsnSacCode} /><DetailRow label="Default tax rate" value={`${item.gstSettings?.defaultTaxRate ?? 0}%`} /><DetailRow label="Pricing" value={item.gstSettings?.priceIncludesTax ? 'GST inclusive' : 'GST extra'} /><DetailRow label="Invoice prefix" value={item.gstSettings?.invoicePrefix} /></Card>
-      <Card><DetailRow label="Payment methods" value={item.paymentMethods?.join(', ')} /><DetailRow label="Panel brands" value={item.panelBrands?.join(', ')} /><DetailRow label="Inverter brands" value={item.inverterBrands?.join(', ')} /></Card>
+  const router = useRouter();
+  const p = useTheme();
+  const { hasPermission: can, user } = useAuth();
+  const state = useFetch(async () => { const [settings, profile] = await Promise.all([api.getSettings(), api.getCompanyProfile()]); return { settings: settings.settings, profile }; });
+  const s = state.data?.settings; const profile = state.data?.profile;
+  const go = (path: string) => router.push(path as never);
+  return <Screen title="Company settings" subtitle="Brand identity, GST, defaults, security and data controls" back refreshing={state.isRefreshing} onRefresh={state.refresh}>
+    {state.isLoading ? <Spinner /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : s && profile ? <>
+      <Section header="Company"><Row icon={<IconTile tone="accent" icon={<Building2 size={17} color={p.accentText} />} />} title={profile.name} subtitle={[profile.businessProfile?.legalEntityName, profile.businessProfile?.gstin].filter(Boolean).join(' · ') || 'Complete legal and GST identity'} onPress={() => go('/company-profile')} /><Row icon={<IconTile tone="blue" icon={<ReceiptText size={17} color={p.blue} />} />} title="GST & invoice rules" subtitle={`${s.gstSettings?.enabled ? `${s.gstSettings.defaultTaxRate}% · ${s.gstSettings.registrationType}` : 'GST disabled'} · HSN ${s.gstSettings?.defaultHsnSacCode || 'not set'}`} onPress={() => go('/settings-form')} /><Row icon={<IconTile tone="purple" icon={<SlidersHorizontal size={17} color={p.purple} />} />} title="Quotation defaults" subtitle="Templates, equipment options and standard terms" onPress={() => go('/quotation-settings')} /></Section>
+      <Section header="Operating defaults"><InfoRow label="Payment methods" value={s.paymentMethods?.length || 0} /><InfoRow label="Panel brands" value={s.panelBrands?.length || 0} /><InfoRow label="Inverter brands" value={s.inverterBrands?.length || 0} /><InfoRow label="Expense categories" value={s.expenseCategories?.length || 0} /><Row title="Edit lists and alerts" action onPress={() => go('/settings-form')} /></Section>
+      <Section header="Security & access"><Row icon={<IconTile tone="green" icon={<ShieldCheck size={17} color={p.green} />} />} title="My security" subtitle="Password, two-factor sign-in and backup codes" onPress={() => go('/account-security')} /><Row icon={<IconTile tone="gray" icon={<LockKeyhole size={17} color={p.secondary} />} />} title="Signed-in devices" subtitle="Review and revoke active sessions" onPress={() => go('/sessions')} />{can('users.manage') ? <Row icon={<IconTile tone="purple" icon={<KeyRound size={17} color={p.purple} />} />} title="Roles & permissions" onPress={() => go('/roles')} /> : null}</Section>
+      <Section header="Data & account">{can('customers.delete') ? <Row icon={<IconTile tone="red" icon={<Trash2 size={17} color={p.red} />} />} title="Recycle bin" subtitle="Restore or permanently remove deleted records" onPress={() => go('/recycle-bin')} /> : null}{can('customers.delete') ? <Row icon={<IconTile tone="orange" icon={<RotateCcw size={17} color={p.orange} />} />} title="Privacy requests" subtitle="Data copies and customer erasure" onPress={() => go('/privacy')} /> : null}{user?.role === 'ADMIN' ? <Row icon={<IconTile tone="green" icon={<CreditCard size={17} color={p.green} />} />} title="SolarOS plan & billing" onPress={() => go('/billing')} /> : null}</Section>
     </> : null}
   </Screen>;
 }
