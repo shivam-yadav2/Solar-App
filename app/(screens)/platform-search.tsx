@@ -3,10 +3,11 @@ import { Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
 import { useFetch } from '../../src/hooks/useFetch';
+import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 import { Badge, Card, EmptyState, ErrorState, Loading, Screen, SearchField } from '../../src/components/ui';
 
 export default function PlatformSearchScreen() {
-  const router = useRouter(); const [query, setQuery] = useState(''); const [debounced, setDebounced] = useState(''); React.useEffect(() => { const timer = setTimeout(() => setDebounced(query.trim()), 350); return () => clearTimeout(timer); }, [query]);
+  const router = useRouter(); const [query, setQuery] = useState(''); const debounced = useDebouncedValue(query.trim(), 350);
   const state = useFetch(() => debounced ? api.searchPlatform(debounced) : Promise.resolve({ users: [], complaints: [] }), [debounced]); const users = state.data?.users ?? []; const complaints = state.data?.complaints ?? [];
   return <Screen title="Platform Search" subtitle="Search users and tickets across tenants" onBack={() => router.back()}><SearchField value={query} onChangeText={setQuery} placeholder="Search email, user, ticket…" />
     {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : !debounced ? <EmptyState message="Enter a search term." /> : users.length + complaints.length === 0 ? <EmptyState message={`No results for “${debounced}”.`} /> : <>

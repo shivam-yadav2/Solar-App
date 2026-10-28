@@ -103,10 +103,10 @@ No module is currently marked Verified.
 | Offline drafts and mutation queue | DPR private drafts and observable retry queue implemented; wider workflow coverage remains Phase 10 | 3/10 |
 | Android production export | Passes; signed build/device install remain | 0/10 |
 | iOS production build | Pending EAS/macOS verification | 0/10 |
-| Role/RBAC regression suite | Partial smoke coverage only | 10 |
-| Financial golden tests | EMI, subsidy, GST, payroll and profit golden checks run through `npm run test:finance`; API/document fixtures remain for Phase 10 | 4/10 |
-| Accessibility audit | Missing | 10 |
-| Signed-build UAT | Missing | 10 |
+| Role/RBAC regression suite | `../SAAS-Solar`'s `npm run smoke` passes: SUPER_ADMIN/ADMIN/CUSTOMER authenticated-read coverage, operational CRUD lifecycle, and cross-tenant isolation. Three stale assertions and one dev-server ESM crash fixed to get it green; see `PHASE_10_IMPLEMENTATION_REPORT.md` | 9/10 |
+| Financial golden tests | EMI, subsidy, GST, payroll and profit golden checks run through `npm run test:finance`; backend profitability reconciliation now runs as part of the automated smoke suite | 8/10 |
+| Accessibility audit | Static review only (label/target coverage); no TalkBack/VoiceOver, font-scale or contrast device pass yet | 3/10 |
+| Signed-build UAT | Missing — needs EAS/Apple/Google credentials and a human reviewer, neither available in this environment | 10 |
 
 ## Known unresolved navigation targets
 

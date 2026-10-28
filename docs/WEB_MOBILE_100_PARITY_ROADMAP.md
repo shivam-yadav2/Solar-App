@@ -279,6 +279,49 @@ Exit gate:
 - Product owner signs off each role’s acceptance suite.
 - Overall parity can then be reported as 100%.
 
+## Phase 11 — Post-release operations
+
+Not part of the original 0–10 scope; defined here because Phase 10's exit
+gate ends at "release" and the product needs an explicit owner for what
+happens after a build ships. Scoped, not yet implemented.
+
+Goal: the app can be observed, supported, and rolled back in production
+without re-opening a feature phase to do it.
+
+- **Monitoring**: wire the mobile client's existing `src/lib/diagnostics.ts`
+  event log into a real crash/error reporting backend (e.g. Sentry) instead
+  of only a 30-event local buffer; keep its existing token/email/number
+  redaction in front of anything that leaves the device. Alert on backend
+  `/health` degradation and on the slow/failed-request counters the API
+  already exposes (`totalRequests`, `failedRequests`, `slowRequests` from
+  `GET /api/health`).
+- **Release runbook**: a short, versioned document covering what `release:check`
+  and `release:smoke` (`../SAAS-Solar/scripts/`) gate, the order operations
+  run in for a deploy, and the manual EAS/App Store/Play Console steps that
+  can't be scripted from here.
+- **Rollback**: a documented path back to the previous backend build and the
+  previous signed mobile build, including what state (DB migrations,
+  `enabled_modules_json` snapshots) does and doesn't roll back cleanly —
+  `server/db/migrations` are additive and not designed to be reversed, so
+  rollback is "redeploy the previous backend build," not "undo the schema."
+- **Support readiness**: the in-app support bundle
+  (`buildSupportBundle()` in `diagnostics.ts`) needs a destination — either
+  a support-ticket attachment flow or an email/share target — so a user-
+  reported bug carries structured diagnostics instead of a text description.
+- **CI quality gates**: run `npm run check` (mobile) and
+  `npm run lint && npm run smoke && npm run test:finance` equivalents
+  (backend) on every PR, so the regressions this session found by hand
+  (the ESM crash, the stale smoke assertions) are caught before merge
+  instead of during manual verification.
+
+Exit gate (once implemented):
+
+- A production incident is visible within minutes, not reported by a user.
+- A new engineer can execute a rollback from the runbook without asking
+  someone who was there for the original deploy.
+- A support bundle reaches a human with enough context to reproduce the
+  issue without a follow-up question.
+
 ## Implementation order and change discipline
 
 - Work strictly in phase order unless a later feature is required to unblock an earlier phase.
