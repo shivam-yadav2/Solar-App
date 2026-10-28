@@ -1,8 +1,11 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { APP_VERSION, getApiBase } from './appConfig';
 import { getActiveTenantId } from './session';
 import { store } from './storage';
+import { uploadWithProgress } from './transfers';
+import { queuedDprCount } from './offlineDpr';
 
 const KEY = 'solaros:diagnostics:events';
 const LIMIT = 30;
@@ -46,4 +49,18 @@ export async function buildSupportBundle(pendingSync: number): Promise<string> {
     tenantScope: getActiveTenantId() ? 'selected' : 'none', pendingSync,
     generatedAt: new Date().toISOString(), recentEvents: events,
   }, null, 2);
+}
+
+/**
+ * Writes the current diagnostics bundle to a cache file and uploads it
+ * through the normal attachment pipeline, so a support ticket can carry
+ * structured, already-redacted diagnostics instead of a text description.
+ */
+export async function uploadDiagnosticsBundle(): Promise<{ fileId: string; fileName: string }> {
+  const bundle = await buildSupportBundle(await queuedDprCount());
+  const name = `diagnostics-${Date.now()}.json`;
+  const uri = `${FileSystem.cacheDirectory}${name}`;
+  await FileSystem.writeAsStringAsync(uri, bundle);
+  const result = await uploadWithProgress({ uri, name, mimeType: 'application/json' });
+  return { fileId: result.fileId, fileName: result.fileName || name };
 }

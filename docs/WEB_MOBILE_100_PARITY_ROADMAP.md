@@ -283,44 +283,49 @@ Exit gate:
 
 Not part of the original 0–10 scope; defined here because Phase 10's exit
 gate ends at "release" and the product needs an explicit owner for what
-happens after a build ships. Scoped, not yet implemented.
+happens after a build ships. See `RELEASE_RUNBOOK.md` for the operational
+detail; this section tracks what's implemented.
 
 Goal: the app can be observed, supported, and rolled back in production
 without re-opening a feature phase to do it.
 
-- **Monitoring**: wire the mobile client's existing `src/lib/diagnostics.ts`
-  event log into a real crash/error reporting backend (e.g. Sentry) instead
-  of only a 30-event local buffer; keep its existing token/email/number
-  redaction in front of anything that leaves the device. Alert on backend
-  `/health` degradation and on the slow/failed-request counters the API
-  already exposes (`totalRequests`, `failedRequests`, `slowRequests` from
-  `GET /api/health`).
-- **Release runbook**: a short, versioned document covering what `release:check`
-  and `release:smoke` (`../SAAS-Solar/scripts/`) gate, the order operations
-  run in for a deploy, and the manual EAS/App Store/Play Console steps that
-  can't be scripted from here.
-- **Rollback**: a documented path back to the previous backend build and the
-  previous signed mobile build, including what state (DB migrations,
-  `enabled_modules_json` snapshots) does and doesn't roll back cleanly —
-  `server/db/migrations` are additive and not designed to be reversed, so
-  rollback is "redeploy the previous backend build," not "undo the schema."
-- **Support readiness**: the in-app support bundle
-  (`buildSupportBundle()` in `diagnostics.ts`) needs a destination — either
-  a support-ticket attachment flow or an email/share target — so a user-
-  reported bug carries structured diagnostics instead of a text description.
-- **CI quality gates**: run `npm run check` (mobile) and
-  `npm run lint && npm run smoke && npm run test:finance` equivalents
-  (backend) on every PR, so the regressions this session found by hand
-  (the ESM crash, the stale smoke assertions) are caught before merge
-  instead of during manual verification.
+- **Monitoring** — done without an external vendor: `../SAAS-Solar/scripts/monitor.ts`
+  (`npm run monitor`) polls the backend's own `/health` and `/ready` and
+  alerts on unreachability or an elevated 5xx/slow-request rate using the
+  counters `GET /api/health` already returns. Routing the mobile client's
+  `src/lib/diagnostics.ts` event log into a hosted crash reporter (Sentry
+  or similar) is a real upgrade but a vendor/budget decision outside what
+  this phase can implement unilaterally — deliberately left open, not
+  silently dropped.
+- **Release runbook** — done: `RELEASE_RUNBOOK.md`, covering both repos'
+  deploy sequence, CI gates, and the EAS/store steps that stay manual.
+- **Rollback** — documented in `RELEASE_RUNBOOK.md`: redeploy the previous
+  backend build (migrations are additive-only by convention, so this is
+  always safe), revert the mobile build via the store's own rollout
+  controls, and restore tenant/product data only from a database backup
+  (there is no in-app undo for it).
+- **Support readiness** — done: `app/(screens)/support.tsx` has an
+  "Include device diagnostics" toggle (default on) that uploads the
+  redacted `buildSupportBundle()` output as a ticket attachment via
+  `uploadDiagnosticsBundle()` in `diagnostics.ts`.
+- **CI quality gates** — done:
+  `SAAS-Solar/.github/workflows/ci.yml` (typecheck, migrations against a
+  throwaway MySQL service, `npm run smoke`, `release:check`, production
+  build) and `SolarOS-Mobile/.github/workflows/ci.yml` (`npm run check`,
+  Android export) run on every PR and push to `main`.
 
-Exit gate (once implemented):
+Exit gate:
 
-- A production incident is visible within minutes, not reported by a user.
+- A production incident is visible within minutes, not reported by a
+  user. **Met for infrastructure-level failure** (unreachable, 5xx spike,
+  slow-request spike) via `npm run monitor`; a hosted crash reporter for
+  client-side JS exceptions is the one piece still open above.
 - A new engineer can execute a rollback from the runbook without asking
-  someone who was there for the original deploy.
+  someone who was there for the original deploy. **Met** — see
+  `RELEASE_RUNBOOK.md`.
 - A support bundle reaches a human with enough context to reproduce the
-  issue without a follow-up question.
+  issue without a follow-up question. **Met** — diagnostics now ride along
+  with every support ticket by default.
 
 ## Implementation order and change discipline
 
