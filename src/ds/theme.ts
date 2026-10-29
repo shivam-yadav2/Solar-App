@@ -115,7 +115,8 @@ const dark: Palette = {
 };
 
 export const space = { xxs: 2, xs: 4, s: 8, m: 12, l: 16, xl: 20, xxl: 24, xxxl: 32, huge: 44 } as const;
-export const radius = { s: 8, m: 12, l: 16, xl: 22, pill: 999 } as const;
+/** Smooth, soft-cornered geometry: s/m for controls and tiles, l/xl for cards, xxl for hero surfaces and sheet tops. */
+export const radius = { s: 10, m: 14, l: 20, xl: 28, xxl: 34, pill: 999 } as const;
 /** Screen side margin (iOS inset-grouped lists use 16–20). */
 export const GUTTER = 16;
 export const HIT = 44;
@@ -124,6 +125,8 @@ const font = Platform.select({ ios: 'System', android: undefined, default: undef
 
 /** iOS text styles (size / line height / weight / tracking). */
 export const type = {
+  /** Hero numerals only (home-screen balance/total figures) — not for headings. */
+  display: { fontSize: 44, lineHeight: 50, fontWeight: '800', letterSpacing: 0.3 },
   largeTitle: { fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: 0.37 },
   title1: { fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: 0.36 },
   title2: { fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: 0.35 },
@@ -149,13 +152,13 @@ export function useTheme(): Palette {
   return useColorScheme() === 'dark' ? dark : light;
 }
 
-/** Soft, layered elevation (iOS cards). */
+/** Soft, diffused elevation — the large radius + soft shadow pairing reads as "smooth." */
 export const elevation = (p: Palette, level: 1 | 2 | 3 = 1) => ({
   shadowColor: p.shadow,
-  shadowOpacity: p.dark ? 0 : [0, 0.05, 0.08, 0.14][level],
-  shadowRadius: [0, 8, 16, 28][level],
-  shadowOffset: { width: 0, height: [0, 2, 6, 12][level] },
-  elevation: p.dark ? 0 : [0, 1, 3, 8][level],
+  shadowOpacity: p.dark ? [0, 0.22, 0.3, 0.4][level] : [0, 0.07, 0.11, 0.18][level],
+  shadowRadius: [0, 12, 22, 36][level],
+  shadowOffset: { width: 0, height: [0, 3, 8, 16][level] },
+  elevation: p.dark ? [0, 2, 4, 10][level] : [0, 1, 3, 8][level],
 });
 
 /** Status text → tone (used by every list badge). */

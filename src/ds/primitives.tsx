@@ -90,7 +90,7 @@ export const Button: React.FC<{
       scaleTo={0.96}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
-      style={[{ height: h, minWidth: h, paddingHorizontal: size === 's' ? 12 : 18, borderRadius: size === 'l' ? 14 : radius.pill, backgroundColor: bg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: disabled ? 0.45 : 1, alignSelf: full ? 'stretch' : 'auto' }, style]}
+      style={[{ height: h, minWidth: h, paddingHorizontal: size === 's' ? 12 : 18, borderRadius: radius.pill, backgroundColor: bg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: disabled ? 0.45 : 1, alignSelf: full ? 'stretch' : 'auto' }, style]}
     >
       {loading ? <ActivityIndicator color={fg} /> : icon}
       {!loading || size !== 's' ? <T variant={size === 's' ? 'footnote' : size === 'm' ? 'subhead' : 'headline'} weight="600" style={{ color: fg }}>{title}</T> : null}

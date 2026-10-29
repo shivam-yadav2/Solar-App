@@ -51,7 +51,7 @@ export function Sheet({ visible, onClose, title, children, right, footer, full }
           <Pressable style={{ flex: 1 }} onPress={close} accessibilityRole="button" accessibilityLabel="Close sheet" />
         </Animated.View>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
-          <Animated.View accessibilityViewIsModal accessibilityLabel={title || 'Sheet'} style={[{ backgroundColor: p.dark ? '#1C1C1E' : p.bg, borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: H * 0.92, height: full ? H * 0.92 : undefined, paddingBottom: Math.max(insets.bottom, space.m) }, panel]}>
+          <Animated.View accessibilityViewIsModal accessibilityLabel={title || 'Sheet'} style={[{ backgroundColor: p.dark ? '#1C1C1E' : p.bg, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, maxHeight: H * 0.92, height: full ? H * 0.92 : undefined, paddingBottom: Math.max(insets.bottom, space.m) }, panel]}>
             <GestureDetector gesture={pan}>
               <View style={{ paddingTop: 6, paddingBottom: title ? 4 : 10 }}>
                 <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: p.tertiary }} />

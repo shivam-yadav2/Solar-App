@@ -8,8 +8,8 @@ import { useApi } from '../../lib/query';
 import { useAuth } from '../../context/AuthContext';
 import { absoluteUrl } from '../../lib/apis/account';
 import { formatDate, formatINR, greeting } from '../../lib/formatters';
-import { Badge, Card, ErrorState, IconTile, ListSkeleton, Row, Screen, Section, space, T, useTheme, radius, elevation } from '../../ds';
-import { ContactBar, HeaderActions, MoneySummary, QuickActions } from '../../components/kit';
+import { Badge, Card, ErrorState, HeroCard, IconTile, ListSkeleton, Row, Screen, Section, space, T, useTheme, radius, elevation } from '../../ds';
+import { ContactBar, HeaderActions, QuickActions } from '../../components/kit';
 import { WorkspaceNotices } from '../../components/gates';
 import { DISCOM_STAGES, projectSteps, Timeline } from '../../components/timeline';
 import type { DiscomLiaisonStage, SolarProject } from '../../types';
@@ -62,17 +62,27 @@ export function CustomerHome() {
             <Card><T variant="subhead" color="secondary">Your project will appear here once it's booked.</T></Card>
           )}
 
-          {total > 0 ? <MoneySummary total={total} paid={paid} /> : null}
+          {total > 0 ? (
+            <HeroCard
+              label="Balance due"
+              value={Math.max(0, total - paid)}
+              money
+              badge={`${Math.round((total > 0 ? paid / total : 0) * 100)}% paid`}
+              badgeTone={paid >= total ? 'green' : 'accent'}
+              actions={[
+                { label: 'Payments', icon: IndianRupee, onPress: () => go('/(tabs)/payments') },
+                { label: 'Invoices', icon: FileText, onPress: () => go('/invoices') },
+                { label: 'EMI', icon: Calculator, onPress: () => go('/emi') },
+              ]}
+            />
+          ) : null}
 
           {main ? <DiscomCard projectId={main.id} /> : null}
 
           <QuickActions items={[
             { label: 'Get help', icon: Wrench, tone: 'red', onPress: () => go('/ticket-form') },
-            { label: 'Invoices', icon: FileText, tone: 'accent', onPress: () => go('/invoices') },
             { label: 'Warranty', icon: ShieldCheck, tone: 'green', onPress: () => go('/warranties') },
-            { label: 'Payments', icon: IndianRupee, tone: 'teal', onPress: () => go('/(tabs)/payments') },
             { label: 'Documents', icon: FolderOpen, tone: 'blue', onPress: () => go('/documents') },
-            { label: 'EMI', icon: Calculator, tone: 'orange', onPress: () => go('/emi') },
           ]} />
 
           {(q.data?.payments || []).length ? (

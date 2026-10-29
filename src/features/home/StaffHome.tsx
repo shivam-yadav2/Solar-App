@@ -12,8 +12,8 @@ import { useCanOpen } from '../../lib/access';
 import { humanizeAction } from '../../lib/activityLabels';
 import { formatINR, greeting, timeAgo } from '../../lib/formatters';
 import {
-  Badge, Card, ComparisonBarChart, DistributionBars, ErrorState, IconTile, Progress, Row, Screen, Section, Skeleton,
-  StatGrid, StatTile, T, useTheme, space, formatMoneyCompact,
+  Badge, Card, ComparisonBarChart, DistributionBars, ErrorState, HeroCard, IconTile, Progress, Row, Screen, Section,
+  Skeleton, StatGrid, StatTile, T, useTheme, space, formatMoneyCompact,
 } from '../../ds';
 import { HeaderActions, QuickActions, QuickAction } from '../../components/kit';
 import { WorkspaceNotices } from '../../components/gates';
@@ -77,14 +77,24 @@ export function StaffHome() {
       onRefresh={() => { void kpi.refresh(); void charts.refresh(); void activity.refresh(); void recent.refresh(); void quotations.refresh(); }}
     >
       <WorkspaceNotices />
-      <QuickActions items={actions} />
+
+      {can('reports.view') && !kpi.loading && !kpi.error ? (
+        <HeroCard
+          label="Contract value"
+          value={Number(k.totalDealValue) || 0}
+          money
+          badge={`${collectionRate}% collected`}
+          badgeTone={collectionRate >= 75 ? 'green' : collectionRate >= 40 ? 'orange' : 'red'}
+          actions={actions.slice(0, 3).map((a) => ({ label: a.label, icon: a.icon, onPress: a.onPress }))}
+        />
+      ) : null}
+      {actions.length > 3 ? <QuickActions items={actions.slice(3)} /> : !can('reports.view') || kpi.error ? <QuickActions items={actions} /> : null}
 
       {can('reports.view') ? (
         kpi.error ? <ErrorState message={kpi.error} onRetry={kpi.refresh} /> : kpi.loading ? (
           <View style={{ gap: space.m }}><View style={{ flexDirection: 'row', gap: space.m }}><Skeleton height={104} radius={16} style={{ flex: 1 }} /><Skeleton height={104} radius={16} style={{ flex: 1 }} /></View><View style={{ flexDirection: 'row', gap: space.m }}><Skeleton height={104} radius={16} style={{ flex: 1 }} /><Skeleton height={104} radius={16} style={{ flex: 1 }} /></View></View>
         ) : (
           <StatGrid>
-            <StatTile label="Contract value" value={Number(k.totalDealValue) || 0} money tone="accent" icon={<Zap size={15} color={p.accentText} />} hint={`${k.totalProjects || 0} projects · ${Number(k.totalCapacityKw || 0).toFixed(1)} kW`} onPress={() => go('/(tabs)/projects')} />
             <StatTile label="Collected" value={Number(k.totalReceived) || 0} money tone="green" icon={<IndianRupee size={15} color={p.green} />} hint={`${collectionRate}% of contract value`} onPress={() => go('/(tabs)/payments')} />
             <StatTile label="To collect" value={Number(k.totalPending) || 0} money tone="orange" icon={<CreditCard size={15} color={p.orange} />} hint="Outstanding balance" onPress={() => go('/(tabs)/projects')} />
             <StatTile label="Net profit" value={Number(k.actualProfit) || 0} money tone={Number(k.actualProfit) >= 0 ? 'green' : 'red'} icon={<Percent size={15} color={Number(k.actualProfit) >= 0 ? p.green : p.red} />} hint={`${Number(k.profitMargin || 0).toFixed(1)}% margin`} onPress={() => go('/profit')} />

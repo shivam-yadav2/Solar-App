@@ -33,6 +33,46 @@ const compactINR = (n: number) => {
 };
 export const formatMoneyCompact = compactINR;
 
+export interface HeroAction { label: string; icon: React.ComponentType<{ size?: number; color?: string }>; onPress: () => void }
+
+/**
+ * Home-screen hero: one headline number, a status pill, and up to three quick
+ * actions. Always dark — the one piece of chrome that doesn't follow the
+ * light/dark toggle, by design (matches the reference wallet-style screens).
+ */
+export const HeroCard: React.FC<{
+  label: string; value: number; money?: boolean; suffix?: string; format?: (value: number) => string;
+  badge?: string; badgeTone?: Tone; actions?: HeroAction[]; style?: StyleProp<ViewStyle>;
+}> = ({ label, value, money, suffix, format, badge, badgeTone = 'green', actions, style }) => {
+  const v = useCountUp(value);
+  const text = format ? format(v) : money ? compactINR(v) : `${Math.round(v).toLocaleString('en-IN')}${suffix || ''}`;
+  const badgeColor = { accent: '#FFC14D', green: '#30D158', red: '#FF6961', orange: '#FF9F0A', blue: '#409CFF', purple: '#DA8FFF', teal: '#5DE6FF', gray: '#AEAEB2' }[badgeTone];
+  return (
+    <View style={[{ backgroundColor: '#121214', borderRadius: radius.xxl, padding: space.xl, gap: space.l, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 10 }, style]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <T variant="subhead" weight="500" style={{ color: 'rgba(235,235,245,0.62)' }} numberOfLines={1}>{label}</T>
+        {badge ? (
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <T variant="caption" weight="600" style={{ color: badgeColor }}>{badge}</T>
+          </View>
+        ) : null}
+      </View>
+      <T variant="display" num numberOfLines={1} adjustsFontSizeToFit style={{ color: '#FFFFFF' }}>{text}</T>
+      {actions?.length ? (
+        <View style={{ flexDirection: 'row', gap: space.s, marginTop: space.xs }}>
+          {actions.map((a) => (
+            <Tap key={a.label} onPress={a.onPress} scaleTo={0.96} accessibilityRole="button" accessibilityLabel={a.label}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, paddingHorizontal: space.l, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.12)' }}>
+              <a.icon size={16} color="#FFFFFF" />
+              <T variant="subhead" weight="600" style={{ color: '#FFFFFF' }}>{a.label}</T>
+            </Tap>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+};
+
 /** KPI tile: label, big animated number, optional hint and icon. */
 export const StatTile: React.FC<{
   label: string; value: number; money?: boolean; format?: (value: number) => string; suffix?: string; hint?: string; icon?: React.ReactNode; tone?: Tone; onPress?: () => void; style?: StyleProp<ViewStyle>;
