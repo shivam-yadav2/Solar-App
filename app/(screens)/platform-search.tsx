@@ -1,18 +1,35 @@
 import React, { useState } from 'react';
-import { Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Search, UserRound, Wrench } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
-import { useFetch } from '../../src/hooks/useFetch';
-import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
-import { Badge, Card, EmptyState, ErrorState, Loading, Screen, SearchField } from '../../src/components/ui';
+import { useApi } from '../../src/lib/query';
+import { Badge, EmptyState, ErrorState, IconTile, ListSkeleton, Row, Screen, SearchBar, Section, useTheme } from '../../src/ds';
 
 export default function PlatformSearchScreen() {
-  const router = useRouter(); const [query, setQuery] = useState(''); const debounced = useDebouncedValue(query.trim(), 350);
-  const state = useFetch(() => debounced ? api.searchPlatform(debounced) : Promise.resolve({ users: [], complaints: [] }), [debounced]); const users = state.data?.users ?? []; const complaints = state.data?.complaints ?? [];
-  return <Screen title="Platform Search" subtitle="Search users and tickets across tenants" onBack={() => router.back()}><SearchField value={query} onChangeText={setQuery} placeholder="Search email, user, ticket…" />
-    {state.isLoading ? <Loading /> : state.error ? <ErrorState message={state.error} onRetry={state.reload} /> : !debounced ? <EmptyState message="Enter a search term." /> : users.length + complaints.length === 0 ? <EmptyState message={`No results for “${debounced}”.`} /> : <>
-      {users.map((item: any) => <Card key={`u-${item.id}`}><Badge text="User" /><Text className="text-sm font-bold text-slate-900 mt-2">{item.username}</Text><Text className="text-xs text-slate-500 mt-1">{item.email}</Text><Text className="text-[10px] text-slate-400 mt-1">{item.tenantName || item.tenantSlug || 'Platform'}</Text></Card>)}
-      {complaints.map((item: any) => <Card key={`c-${item.id}`}><Badge text={item.status || 'Ticket'} tone="amber" /><Text className="text-sm font-bold text-slate-900 mt-2">{item.subject}</Text><Text className="text-xs text-slate-500 mt-1">{item.customId} · {item.tenantName || item.tenantSlug || 'Unknown tenant'}</Text></Card>)}
-    </>}
-  </Screen>;
+  const p = useTheme();
+  const [text, setText] = useState('');
+  const [q, setQ] = useState('');
+  const res = useApi(['saas', 'search', q], () => api.searchPlatform(q), { enabled: q.length > 1 });
+  const users: any[] = res.data?.users || [];
+  const tickets: any[] = res.data?.complaints || [];
+  return (
+    <Screen title="Search" large={false} back>
+      <SearchBar value={text} onChange={setText} onSearch={setQ} placeholder="Email, name or ticket number" autoFocus />
+      {q.length < 2 ? <EmptyState icon={<Search size={44} color={p.tertiary} />} title="Search every company" message="Find users and service tickets across all workspaces." />
+        : res.loading ? <ListSkeleton rows={4} /> : res.error ? <ErrorState message={res.error} onRetry={res.refresh} />
+        : users.length + tickets.length === 0 ? <EmptyState title="No results" message={`Nothing found for “${q}”.`} /> : (
+          <>
+            {users.length ? (
+              <Section header={`Users · ${users.length}`}>
+                {users.map((u) => <Row key={u.id} icon={<IconTile icon={<UserRound size={17} color={p.blue} />} tone="blue" />} title={u.username} subtitle={`${u.email} · ${u.tenantName || u.tenantSlug || 'Platform'}`} accessory={u.isActive === false ? <Badge text="Inactive" tone="gray" /> : undefined} />)}
+              </Section>
+            ) : null}
+            {tickets.length ? (
+              <Section header={`Service tickets · ${tickets.length}`}>
+                {tickets.map((t) => <Row key={t.id} icon={<IconTile icon={<Wrench size={17} color={p.orange} />} tone="orange" />} title={t.subject} subtitle={`${t.customId} · ${t.tenantName || t.tenantSlug || 'Unknown company'}`} accessory={<Badge text={t.status || 'Ticket'} />} />)}
+              </Section>
+            ) : null}
+          </>
+        )}
+    </Screen>
+  );
 }

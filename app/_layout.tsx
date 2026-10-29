@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { View, Text, Image, AppState, Platform, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, AppState, Platform, StyleSheet } from 'react-native';
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
@@ -19,15 +19,18 @@ import { OverlayProvider, useTheme } from '../src/ds';
 
 SplashScreen.setOptions({ duration: 400, fade: true });
 
-const BOOT_SPLASH_BACKGROUND = '#071426';
-const MINIMUM_NATIVE_SPLASH_MS = 450;
-
-function AppBootSplash() {
+/**
+ * While the saved session is restored: the first screen's own background,
+ * nothing else (HIG › Launching: no logo or text, nearly identical to the
+ * first screen). A spinner appears only if it takes longer than a moment.
+ */
+function BootCover() {
+  const p = useTheme();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 1200); return () => clearTimeout(t); }, []);
   return (
-    <View style={styles.bootSplash}>
-      <Image source={require('../assets/branding/brand-adaptive-foreground-v3.png')} style={styles.bootSplashImage} resizeMode="contain" />
-      <Text style={styles.bootSplashTitle}>SolarOS</Text>
-      <Text style={styles.bootSplashSubtitle}>Solar operations, simplified</Text>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: p.bg, alignItems: 'center', justifyContent: 'center', zIndex: 50, elevation: 50 }]}>
+      {slow ? <ActivityIndicator color={p.secondary} /> : null}
     </View>
   );
 }
@@ -42,30 +45,26 @@ function AuthGate() {
   const segments = useSegments();
   const router = useRouter();
   const p = useTheme();
-  const [minimumSplashElapsed, setMinimumSplashElapsed] = useState(Platform.OS === 'web');
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    const timer = setTimeout(() => setMinimumSplashElapsed(true), MINIMUM_NATIVE_SPLASH_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
   useEffect(() => { void SystemUI.setBackgroundColorAsync(p.bg).catch(() => {}); }, [p.bg]);
 
   useEffect(() => {
-    if (isLoading || !minimumSplashElapsed) return;
+    if (isLoading) return;
     const inAuthGroup = segments[0] === 'login';
     if (!isAuthenticated && !inAuthGroup) router.replace('/login');
     else if (isAuthenticated && inAuthGroup) router.replace('/(tabs)/dashboard');
-  }, [isAuthenticated, isLoading, minimumSplashElapsed, segments, router]);
+  }, [isAuthenticated, isLoading, segments, router]);
 
   // Tapping a push notification opens the notifications screen.
   useEffect(() => onNotificationTap(() => { if (isAuthenticated) router.push('/notifications'); }), [isAuthenticated, router]);
 
-  if (isLoading || !minimumSplashElapsed) return <AppBootSplash />;
-  if (isAuthenticated && user?.forcePasswordChange) return <SetPasswordScreen />;
-  if (isAuthenticated && server.blocked && user?.role !== 'SUPER_ADMIN') return <BlockedScreen />;
-  if (server.maintenance && user?.role !== 'SUPER_ADMIN') return <MaintenanceScreen onRetry={refreshUser} />;
+  // The navigator is always mounted: expo-router hides the native launch
+  // screen only once navigation is ready, so rendering anything else first
+  // could leave the app on the launch screen.
+  const gate = isLoading ? <BootCover />
+    : isAuthenticated && user?.forcePasswordChange ? <SetPasswordScreen />
+    : isAuthenticated && server.blocked && user?.role !== 'SUPER_ADMIN' ? <BlockedScreen />
+    : server.maintenance && user?.role !== 'SUPER_ADMIN' ? <MaintenanceScreen onRetry={refreshUser} />
+    : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: p.bg }}>
@@ -74,7 +73,8 @@ function AuthGate() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(screens)" />
       </Stack>
-      {isAuthenticated ? <><BackupCodesSheet /><LegalSheet /></> : null}
+      {isAuthenticated && !gate ? <><BackupCodesSheet /><LegalSheet /></> : null}
+      {gate ? <View style={StyleSheet.absoluteFill}>{gate}</View> : null}
     </View>
   );
 }
@@ -117,10 +117,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  bootSplash: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BOOT_SPLASH_BACKGROUND },
-  bootSplashImage: { width: 240, height: 240, marginBottom: 2 },
-  bootSplashTitle: { color: '#f8fafc', fontSize: 28, fontWeight: '800', letterSpacing: -0.8 },
-  bootSplashSubtitle: { color: '#93a4bc', fontSize: 12, marginTop: 6, letterSpacing: 0.3 },
-});

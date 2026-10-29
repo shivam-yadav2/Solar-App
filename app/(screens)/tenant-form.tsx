@@ -1,14 +1,71 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
-import { Card, ChoiceField, ErrorState, FormField, Loading, OptionField, PrimaryButton, Screen } from '../../src/components/ui';
+import { Button, ErrorState, FormSection, ListSkeleton, Screen, SelectField, TextField, haptic, useOverlay } from '../../src/ds';
+import { CredentialsSheet, Credentials } from '../../src/components/CredentialsSheet';
 
-const initial: any = { name: '', slug: '', adminEmail: '', adminPassword: '', planId: '', status: 'active', supportPhone: '', companyTagline: '', legalEntityName: '', gstin: '', pan: '', address: '', city: '', state: '', pincode: '' };
-export default function TenantFormScreen() {
-  const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const [plans, setPlans] = useState<any[]>([]); const [form, setForm] = useState(initial); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
-  useEffect(() => { Promise.all([api.getPlans(), id ? api.getSaaSTenant(String(id)) : Promise.resolve(null)]).then(([planData, tenantData]) => { setPlans(planData.plans.filter(item => item.isActive || item.id === tenantData?.tenant.subscription?.planId)); if (tenantData?.tenant) { const item = tenantData.tenant; setForm({ ...initial, ...item, planId: item.subscription?.planId || '', supportPhone: item.branding?.supportPhone || '', companyTagline: item.branding?.companyTagline || '', legalEntityName: item.businessProfile?.legalEntityName || '', gstin: item.businessProfile?.gstin || '', pan: item.businessProfile?.pan || '', address: item.businessProfile?.address || '', city: item.businessProfile?.city || '', state: item.businessProfile?.state || '', pincode: item.businessProfile?.pincode || '' }); } }).catch(e => setError(e.message)).finally(() => setLoading(false)); }, [id]); const set = (key: string) => (value: string) => setForm((current: any) => ({ ...current, [key]: value }));
-  const save = async () => { if (!form.name.trim() || (!id && (!form.slug.trim() || !form.adminEmail.trim() || !form.planId))) { Alert.alert('Missing details', 'Name, slug, admin email, and plan are required for onboarding.'); return; } setSaving(true); try { if (id) await api.updateSaaSTenant(String(id), { name: form.name, adminEmail: form.adminEmail, status: form.status, branding: { supportPhone: form.supportPhone, companyTagline: form.companyTagline }, businessProfile: { legalEntityName: form.legalEntityName, gstin: form.gstin, pan: form.pan, address: form.address, city: form.city, state: form.state, pincode: form.pincode } } as any); else { const result = await api.createSaaSTenant({ ...form, branding: { supportPhone: form.supportPhone, companyTagline: form.companyTagline }, businessProfile: { legalEntityName: form.legalEntityName, gstin: form.gstin, pan: form.pan, address: form.address, city: form.city, state: form.state, pincode: form.pincode } } as any); Alert.alert('Tenant onboarded', `Admin: ${result.initialCredentials.email}\nPassword: ${result.initialCredentials.tempPassword}`); } router.back(); } catch (e: any) { Alert.alert('Could not save tenant', e.message); } finally { setSaving(false); } };
-  return <Screen title={id ? 'Edit Tenant' : 'Onboard Tenant'} subtitle="Company, plan and admin account" onBack={() => router.back()}>{loading ? <Loading /> : error ? <ErrorState message={error} /> : <><Card><FormField label="Tenant name" value={form.name} onChangeText={set('name')} required />{!id ? <FormField label="Subdomain slug" value={form.slug} onChangeText={set('slug')} required /> : null}<FormField label="Admin email" value={form.adminEmail} onChangeText={set('adminEmail')} keyboardType="email-address" required />{!id ? <FormField label="Admin password" value={form.adminPassword} onChangeText={set('adminPassword')} placeholder="Defaults to admin123" secureTextEntry /> : <ChoiceField label="Status" value={form.status} options={['active', 'trial', 'suspended', 'expired']} onChange={set('status')} />}{!id ? <OptionField label="Subscription plan *" value={form.planId} onChange={set('planId')} options={plans.map(item => ({ value: item.id, label: `${item.name} · ₹${item.pricePerMonth}/${item.billingCycle}` }))} /> : null}</Card><Card><FormField label="Legal entity name" value={form.legalEntityName} onChangeText={set('legalEntityName')} /><FormField label="GSTIN" value={form.gstin} onChangeText={set('gstin')} /><FormField label="PAN" value={form.pan} onChangeText={set('pan')} /><FormField label="Address" value={form.address} onChangeText={set('address')} multiline /><FormField label="City" value={form.city} onChangeText={set('city')} /><FormField label="State" value={form.state} onChangeText={set('state')} /><FormField label="Pincode" value={form.pincode} onChangeText={set('pincode')} keyboardType="numeric" /><FormField label="Support phone" value={form.supportPhone} onChangeText={set('supportPhone')} keyboardType="phone-pad" /><FormField label="Company tagline" value={form.companyTagline} onChangeText={set('companyTagline')} /></Card><PrimaryButton label={saving ? 'Saving…' : id ? 'Save Tenant' : 'Onboard Tenant'} onPress={() => void save()} disabled={saving} /></>}
-  </Screen>;
+const blank: any = { name: '', slug: '', adminEmail: '', adminPassword: '', planId: '', status: 'active', supportPhone: '', companyTagline: '', legalEntityName: '', gstin: '', pan: '', address: '', city: '', state: '', pincode: '' };
+
+export default function TenantForm() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { toast } = useOverlay();
+  const [plans, setPlans] = useState<any[]>([]);
+  const [f, setF] = useState(blank);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [creds, setCreds] = useState<Credentials | null>(null);
+  useEffect(() => {
+    Promise.all([api.getPlans(), id ? api.getSaaSTenant(id) : Promise.resolve(null)]).then(([pd, td]) => {
+      setPlans(pd.plans.filter((x) => x.isActive || x.id === td?.tenant.subscription?.planId));
+      const t: any = td?.tenant;
+      if (t) setF({ ...blank, name: t.name, slug: t.slug, adminEmail: t.adminEmail, status: t.status, planId: t.subscription?.planId || '', supportPhone: t.branding?.supportPhone || '', companyTagline: t.branding?.companyTagline || '',
+        legalEntityName: t.businessProfile?.legalEntityName || '', gstin: t.businessProfile?.gstin || '', pan: t.businessProfile?.pan || '', address: t.businessProfile?.address || '', city: t.businessProfile?.city || '', state: t.businessProfile?.state || '', pincode: t.businessProfile?.pincode || '' });
+    }).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [id]);
+  const set = (k: string) => (v: string) => setF((s: any) => ({ ...s, [k]: v }));
+  const profile = () => ({ branding: { supportPhone: f.supportPhone, companyTagline: f.companyTagline }, businessProfile: { legalEntityName: f.legalEntityName, gstin: f.gstin, pan: f.pan, address: f.address, city: f.city, state: f.state, pincode: f.pincode } });
+  const save = async () => {
+    if (!f.name.trim() || (!id && (!f.slug.trim() || !f.adminEmail.trim() || !f.planId))) { toast('Name, company code, admin email and plan are needed', 'error'); haptic.error(); return; }
+    setSaving(true);
+    try {
+      if (id) { await api.updateSaaSTenant(id, { name: f.name, adminEmail: f.adminEmail, status: f.status, ...profile() } as any); toast('Company saved'); router.back(); }
+      else {
+        const r = await api.createSaaSTenant({ name: f.name, slug: f.slug.trim().toLowerCase(), adminEmail: f.adminEmail.trim(), adminPassword: f.adminPassword || undefined, planId: f.planId, ...profile() } as any);
+        toast('Company created');
+        setCreds({ name: f.name, login: r.initialCredentials.email, password: r.initialCredentials.tempPassword || f.adminPassword, phone: f.supportPhone, company: 'SolarOS' });
+      }
+    } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
+  };
+  return (
+    <Screen title={id ? 'Edit company' : 'New company'} large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+      {error ? <ErrorState message={error} /> : loading ? <ListSkeleton rows={4} avatar={false} /> : (
+        <>
+          <FormSection header="Company">
+            <TextField label="Company name" value={f.name} onChange={set('name')} required />
+            {!id ? <TextField label="Company code" kind="email" value={f.slug} onChange={set('slug')} required placeholder="e.g. suryapower" hint="Used in the customer login link. Letters and numbers only." /> : null}
+            <TextField label="Admin email" kind="email" value={f.adminEmail} onChange={set('adminEmail')} required />
+            {!id ? <TextField label="Admin password" kind="password" value={f.adminPassword} onChange={set('adminPassword')} placeholder="Leave empty for a temporary password" /> : null}
+            {!id ? <SelectField label="Plan" required value={f.planId} options={plans.map((x) => ({ value: x.id, label: x.name, subtitle: `₹${x.pricePerMonth}/${x.billingCycle}` }))} onChange={(o) => o && setF((s: any) => ({ ...s, planId: o.value }))} />
+              : <SelectField label="Status" value={f.status} options={['active', 'trial', 'suspended', 'expired'].map((x) => ({ value: x, label: x.charAt(0).toUpperCase() + x.slice(1) }))} onChange={(o) => o && setF((s: any) => ({ ...s, status: o.value }))} />}
+          </FormSection>
+          <FormSection header="Legal & invoicing">
+            <TextField label="Legal entity name" value={f.legalEntityName} onChange={set('legalEntityName')} />
+            <View style={{ flexDirection: 'row' }}><View style={{ flex: 3 }}><TextField label="GSTIN" value={f.gstin} onChange={set('gstin')} /></View><View style={{ flex: 2 }}><TextField label="PAN" value={f.pan} onChange={set('pan')} /></View></View>
+            <TextField label="Address" value={f.address} onChange={set('address')} multiline />
+            <View style={{ flexDirection: 'row' }}><View style={{ flex: 1 }}><TextField label="City" kind="name" value={f.city} onChange={set('city')} /></View><View style={{ width: 120 }}><TextField label="Pincode" kind="number" value={f.pincode} onChange={set('pincode')} maxLength={6} /></View></View>
+            <TextField label="State" kind="name" value={f.state} onChange={set('state')} />
+          </FormSection>
+          <FormSection header="Contact">
+            <TextField label="Support phone" kind="phone" value={f.supportPhone} onChange={set('supportPhone')} />
+            <TextField label="Tagline" value={f.companyTagline} onChange={set('companyTagline')} />
+          </FormSection>
+          <Button title={id ? 'Save company' : 'Create company'} loading={saving} onPress={save} full />
+        </>
+      )}
+      <CredentialsSheet creds={creds} onClose={() => { setCreds(null); router.back(); }} />
+    </Screen>
+  );
 }

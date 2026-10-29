@@ -30,7 +30,7 @@ export const AppTopBar: React.FC = () => {
               {tenant?.name || (user?.role === 'SUPER_ADMIN' ? 'Platform Console' : 'SolarOS Workspace')}
             </Text>
           </View>
-          <Text className="text-slate-400 text-[10px] mt-0.5" numberOfLines={1}>
+          <Text className="text-slate-400 text-[11px] mt-0.5" numberOfLines={1}>
             {user?.role === 'CUSTOMER' ? 'Customer Portal' : 'Solar EPC Operations'}
           </Text>
         </View>

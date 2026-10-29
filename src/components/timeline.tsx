@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { Check, X } from 'lucide-react-native';
-import { space, T, useTheme } from '../ds';
+import { space, T, Tap, useTheme } from '../ds';
 import type { ProjectStatus } from '../types';
 
 export type StepState = 'done' | 'current' | 'todo' | 'blocked';
@@ -24,7 +24,9 @@ export const Timeline: React.FC<{ steps: Step[]; onPressStep?: (i: number) => vo
         const color = st.state === 'done' ? p.green : st.state === 'current' ? p.accent : st.state === 'blocked' ? p.red : p.fillStrong;
         const last = i === steps.length - 1;
         return (
-          <View key={st.title + i} style={{ flexDirection: 'row', gap: space.m, minHeight: 46 }}>
+          // The whole row is the tap target (HIG: 44 pt minimum), not just the title text.
+          <Tap key={st.title + i} disabled={!onPressStep} onPress={onPressStep ? () => onPressStep(i) : undefined} scaleTo={0.99} accessibilityRole={onPressStep ? 'button' : undefined} accessibilityLabel={`${st.title}${st.subtitle ? `, ${st.subtitle}` : ''}`}
+            style={{ flexDirection: 'row', gap: space.m, minHeight: 46 }}>
             <View style={{ width: 22, alignItems: 'center' }}>
               <View style={{ width: 22, height: 22, alignItems: 'center', justifyContent: 'center' }}>
                 {st.state === 'current' ? <Pulse color={p.accent} /> : null}
@@ -36,12 +38,12 @@ export const Timeline: React.FC<{ steps: Step[]; onPressStep?: (i: number) => vo
             </View>
             <View style={{ flex: 1, paddingBottom: last ? 0 : space.m, flexDirection: 'row', gap: space.s }}>
               <View style={{ flex: 1 }}>
-                <T variant="subhead" weight={st.state === 'current' ? '600' : '400'} color={st.state === 'todo' ? 'secondary' : 'label'} onPress={onPressStep ? () => onPressStep(i) : undefined}>{st.title}</T>
+                <T variant="subhead" weight={st.state === 'current' ? '600' : '400'} color={st.state === 'todo' ? 'secondary' : 'label'}>{st.title}</T>
                 {st.subtitle ? <T variant="footnote" color="secondary">{st.subtitle}</T> : null}
               </View>
               {st.right}
             </View>
-          </View>
+          </Tap>
         );
       })}
     </View>
