@@ -6,8 +6,9 @@ import { useAuth } from '../../src/context/AuthContext';
 import { Button, ChoiceField, ErrorState, FormSection, ListSkeleton, Screen, T, TextField, ToggleField, haptic, useOverlay, useUnsavedChanges } from '../../src/ds';
 import { CredentialsSheet, Credentials } from '../../src/components/CredentialsSheet';
 import type { CustomerStatus } from '../../src/types';
+import { confirmAsync } from '../../src/lib/confirm';
 
-const blank = { name: '', mobile: '', email: '', address: '', city: 'Lucknow', state: 'Uttar Pradesh', pincode: '', status: 'Active' as CustomerStatus, notes: '', createLogin: false };
+const blank = { name: '', mobile: '', email: '', address: '', city: '', state: '', pincode: '', status: 'Active' as CustomerStatus, notes: '', createLogin: false };
 type Form = typeof blank;
 
 export default function CustomerForm() {
@@ -59,7 +60,11 @@ export default function CustomerForm() {
         allowNavigation();
         router.back();
       } else {
-        const r = await api.createCustomer(body);
+        // Same mobile already on file: the server asks first.
+        const r = await api.createCustomer(body).catch(async (e: any) => {
+          if (e.code !== 'POSSIBLE_DUPLICATE' || !(await confirmAsync('Possible duplicate', e.message, 'Add anyway'))) throw e;
+          return api.createCustomer({ ...body, force: true } as any);
+        });
         toast('Customer added');
         allowNavigation();
         if (r.tempPassword) {

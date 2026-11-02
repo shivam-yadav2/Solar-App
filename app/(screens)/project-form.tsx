@@ -8,6 +8,7 @@ import {
   haptic, num, todayISO, useOverlay, useUnsavedChanges,
 } from '../../src/ds';
 import type { ProjectStatus } from '../../src/types';
+import { confirmAsync } from '../../src/lib/confirm';
 
 type Form = {
   customerId: string; customerName: string; projectName: string; status: ProjectStatus;
@@ -121,7 +122,11 @@ export default function ProjectFormScreen() {
         capacityKw: num(form.capacityKw), panelsCount: num(form.panelsCount), dealAmount: num(form.dealAmount),
         discount: num(form.discount), taxGst: num(form.taxGst), bookedProfit: num(form.bookedProfit),
       };
-      if (id) await api.updateProject(id, payload); else await api.createProject(payload);
+      if (id) await api.updateProject(id, payload);
+      else await api.createProject(payload).catch(async (e: any) => {
+        if (e.code !== 'POSSIBLE_DUPLICATE' || !(await confirmAsync('Possible duplicate', e.message, 'Create anyway'))) throw e;
+        return api.createProject({ ...payload, force: true } as any);
+      });
       haptic.success();
       toast(id ? 'Project updated' : 'Project created');
       allowNavigation();

@@ -69,9 +69,14 @@ export interface NativeUploadFile {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Machine-readable reason from the server (e.g. POSSIBLE_DUPLICATE). */
+  code?: string;
+  data?: any;
+  constructor(message: string, status: number, data?: any) {
     super(message);
     this.status = status;
+    this.code = data?.code;
+    this.data = data;
   }
 }
 
@@ -128,7 +133,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     await recordClientEvent({ kind: 'api', route: url, method, status: response.status, message: String((data as any).error || '').slice(0, 160) });
-    throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status);
+    throw new ApiError((data as any).error || `HTTP ${response.status}: Request failed`, response.status, data);
   }
 
   if ((options.method || 'GET').toUpperCase() !== 'GET') invalidateFor(url);

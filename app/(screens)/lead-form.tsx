@@ -6,7 +6,7 @@ import { LEAD_SOURCES, LEAD_STAGES } from '../../src/lib/constants';
 import { Button, ErrorState, FormSection, ListSkeleton, Screen, SelectField, space, T, TextField, haptic, num, useOverlay } from '../../src/ds';
 import type { LeadSource, LeadStatus } from '../../src/types';
 
-const blank = { prospectName: '', phone: '', email: '', address: '', city: 'Lucknow', state: 'Uttar Pradesh', pincode: '', monthlyElectricityBill: '', sanctionedLoadKw: '', proposedCapacityKw: '', leadSource: 'Referral' as LeadSource, status: 'New' as LeadStatus, lostReason: '', notes: '' };
+const blank = { prospectName: '', phone: '', email: '', address: '', city: '', state: '', pincode: '', monthlyElectricityBill: '', sanctionedLoadKw: '', proposedCapacityKw: '', leadSource: 'Referral' as LeadSource, status: 'New' as LeadStatus, lostReason: '', notes: '' };
 
 /** Rough rooftop size from the monthly bill (₹8/unit, 120 units per kW per month). */
 const suggestKw = (bill: number) => (bill > 0 ? Math.max(1, Math.round((bill / 8 / 120) * 2) / 2) : 0);
