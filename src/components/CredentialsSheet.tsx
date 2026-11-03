@@ -5,12 +5,12 @@ import { Button, GUTTER, InfoRow, Section, Sheet, space, T, useOverlay } from '.
 import { openWhatsApp } from './kit';
 import { getApiBase } from '../lib/appConfig';
 
-export interface Credentials { name: string; login: string; password: string; phone?: string; company?: string; notified?: string[] }
+export interface Credentials { name: string; login: string; password: string; phone?: string; company?: string; notified?: string[]; /** Company code: send its own portal link (/c/<slug>) instead of the SolarOS sign-in. */ slug?: string }
 
 /** One-time temporary password: show, copy, or send on WhatsApp. */
 export const CredentialsSheet: React.FC<{ creds: Credentials | null; onClose: () => void }> = ({ creds, onClose }) => {
   const { toast } = useOverlay();
-  const site = getApiBase().replace(/\/api\/?$/, '');
+  const site = `${getApiBase().replace(/\/api\/?$/, '')}${creds?.slug ? `/c/${creds.slug}` : ''}`;
   const message = creds ? `Hello ${creds.name},\n\nYour ${creds.company || 'solar'} customer portal login:\nLogin: ${creds.login}\nTemporary password: ${creds.password}\n\nSign in at ${site} or the SolarOS app — you'll be asked to set your own password.` : '';
   return (
     <Sheet visible={!!creds} onClose={onClose} title="Portal login ready"

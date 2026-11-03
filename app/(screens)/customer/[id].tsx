@@ -45,7 +45,7 @@ export default function CustomerDetail() {
     if (!c) return;
     try {
       const result = await api.resetCustomerPassword(c.id);
-      setCreds({ name: c.name, login: result.email || c.email || result.username, password: result.tempPassword, phone: c.mobile, company: tenant?.name, notified: result.notified });
+      setCreds({ name: c.name, login: result.email || c.email || result.username, password: result.tempPassword, phone: c.mobile, company: tenant?.name, slug: tenant?.slug, notified: result.notified });
       void q.refresh();
     } catch (error: any) { toast(error.message, 'error'); }
   };

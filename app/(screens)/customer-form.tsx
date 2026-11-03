@@ -69,7 +69,7 @@ export default function CustomerForm() {
         allowNavigation();
         if (r.tempPassword) {
           setCreatedId(r.customer.id);
-          setCreds({ name: r.customer.name, login: r.customer.email, password: r.tempPassword, phone: r.customer.mobile, company: tenant?.name, notified: r.notified });
+          setCreds({ name: r.customer.name, login: r.customer.email, password: r.tempPassword, phone: r.customer.mobile, company: tenant?.name, slug: tenant?.slug, notified: r.notified });
         } else {
           router.replace({ pathname: '/customer/[id]', params: { id: r.customer.id } });
         }
