@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../src/lib/api';
+import { care } from '../../src/lib/apis/care';
 import { loadProjects, toOptions } from '../../src/lib/pickers';
 import { formatINR } from '../../src/lib/formatters';
 import { Button, DateField, ErrorState, FormSection, ListSkeleton, Screen, SelectField, T, TextField, haptic, num, todayISO, useOverlay } from '../../src/ds';
@@ -11,18 +12,31 @@ const CATEGORIES = ['Solar Panels', 'Inverter', 'Mounting Structure & Civil', 'W
 
 export default function ExpenseForm() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ projectId?: string; customerId?: string }>();
+  const params = useLocalSearchParams<{ projectId?: string; customerId?: string; id?: string; customId?: string }>();
+  const editing = !!params.id;
+  const [locked, setLocked] = useState(false);
   const { toast } = useOverlay();
   const settings = useQuery({ queryKey: ['settings'], queryFn: api.getSettings, staleTime: 10 * 60_000 });
   const [f, setF] = useState({ projectId: params.projectId || '', projectName: '', customerId: params.customerId || '', expenseName: '', expenseCategory: '', amount: '', date: todayISO(), vendor: '', remark: '' });
   const [bill, setBill] = useState<Attached | null>(null);
-  const [loading, setLoading] = useState(!!params.projectId);
+  const [loading, setLoading] = useState(!!params.projectId || editing);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // Editing: load the expense (an approved one stays on its project).
   useEffect(() => {
-    if (!params.projectId) return;
+    if (!params.id) return;
+    api.getExpenses({ limit: '50', search: params.customId || '' }).then((r: any) => {
+      const e = (r.expenses || []).find((x: any) => x.id === params.id);
+      if (!e) { setError('Expense not found.'); return; }
+      setLocked((e.approvalStatus || 'Approved') === 'Approved');
+      setF({ projectId: e.projectId, projectName: e.projectName || '', customerId: e.customerId, expenseName: e.expenseName, expenseCategory: e.expenseCategory, amount: String(e.amount), date: String(e.date).slice(0, 10), vendor: e.vendor || '', remark: e.remark || '' });
+    }).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  }, [params.id]);
+
+  useEffect(() => {
+    if (!params.projectId || params.id) return;
     api.getProject(params.projectId).then((r) => setF((s) => ({ ...s, projectName: r.project.projectName, customerId: r.project.customerId }))).catch((e) => setError(e.message)).finally(() => setLoading(false));
   }, [params.projectId]);
 
@@ -37,18 +51,24 @@ export default function ExpenseForm() {
     if (Object.keys(e).length) { haptic.error(); return; }
     setSaving(true);
     try {
-      await api.createExpense({ projectId: f.projectId, customerId: f.customerId, expenseName: f.expenseName.trim(), expenseCategory: f.expenseCategory, amount: num(f.amount), date: f.date, vendor: f.vendor || undefined, remark: f.remark || undefined, receiptFileId: bill?.fileId, receiptFileName: bill?.fileName });
-      toast(`${formatINR(num(f.amount))} added — waiting for approval`);
+      if (editing) {
+        await care.updateExpense(params.id!, { ...(locked ? {} : { projectId: f.projectId }), expenseName: f.expenseName.trim(), expenseCategory: f.expenseCategory, amount: num(f.amount), date: f.date, vendor: f.vendor, remark: f.remark });
+        toast('Expense updated');
+        router.back();
+        return;
+      }
+      const r: any = await api.createExpense({ projectId: f.projectId, customerId: f.customerId, expenseName: f.expenseName.trim(), expenseCategory: f.expenseCategory, amount: num(f.amount), date: f.date, vendor: f.vendor || undefined, remark: f.remark || undefined, receiptFileId: bill?.fileId, receiptFileName: bill?.fileName });
+      toast(r?.expense?.approvalStatus === 'Approved' ? `${formatINR(num(f.amount))} added` : `${formatINR(num(f.amount))} added — waiting for approval`);
       router.back();
     } catch (err: any) { toast(err.message, 'error'); } finally { setSaving(false); }
   };
 
   return (
-    <Screen title="Add expense" large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+    <Screen title={editing ? 'Edit expense' : 'Add expense'} large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
       {error ? <ErrorState message={error} /> : loading ? <ListSkeleton rows={3} avatar={false} /> : (
         <>
           <FormSection>
-            <SelectField label="Project" required value={f.projectId} display={f.projectName} load={loadProjects()} queryKey="projects-all" error={errors.project}
+            <SelectField label="Project" required disabled={locked} hint={locked ? 'An approved expense stays on its project.' : undefined} value={f.projectId} display={f.projectName} load={loadProjects()} queryKey="projects-all" error={errors.project}
               onChange={async (o) => { setF((s) => ({ ...s, projectId: o?.value || '', projectName: o?.label || '' })); if (o) { const r = await api.getProject(o.value).catch(() => null); if (r) setF((s) => ({ ...s, customerId: r.project.customerId })); } }} />
           </FormSection>
           <FormSection header="Expense">
@@ -59,10 +79,10 @@ export default function ExpenseForm() {
             <TextField label="Vendor / paid to" kind="name" value={f.vendor} onChange={(v) => setF((s) => ({ ...s, vendor: v }))} placeholder="Optional" />
           </FormSection>
           <FormSection>
-            <AttachField label="Bill or receipt" value={bill} onChange={setBill} />
+            {!editing ? <AttachField label="Bill or receipt" value={bill} onChange={setBill} /> : null}
             <TextField label="Remark" value={f.remark} onChange={(v) => setF((s) => ({ ...s, remark: v }))} multiline />
           </FormSection>
-          <Button title="Add expense" loading={saving} onPress={save} full />
+          <Button title={editing ? 'Save changes' : 'Add expense'} loading={saving} onPress={save} full />
           <T variant="footnote" color="secondary" align="center">Expenses count towards project cost once approved.</T>
         </>
       )}

@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { Alert, Linking, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { CircleCheck, CircleDollarSign, Ellipsis, FileText, HardHat, IndianRupee, Package, Pencil, Plus, ReceiptText, ShieldCheck, Trash2, UserRound, Wrench, Zap } from 'lucide-react-native';
+import { BellRing, CalendarClock, CircleCheck, CircleDollarSign, Ellipsis, FileText, HardHat, IndianRupee, Package, Pencil, Plus, ReceiptText, ShieldCheck, Trash2, UserRound, Users, Wrench, Zap } from 'lucide-react-native';
+import { care, type MaintenanceVisit } from '../../lib/apis/care';
+import { loadCustomers } from '../../lib/pickers';
+import { FormSheet } from '../../components/FormSheet';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/query';
 import { useAuth } from '../../context/AuthContext';
@@ -29,6 +32,8 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
   const q = useApi(['projects', 'detail', id], () => api.getProject(id));
   const [tab, setTab] = useState<View_>((['overview', 'money', 'site', 'discom', 'files'].includes(initialTab || '') ? initialTab : 'overview') as View_);
   const [stageSheet, setStageSheet] = useState(false);
+  const [sheet, setSheet] = useState<null | 'customer' | 'merge'>(null);
+  const [merge, setMerge] = useState<{ error: string; targets: { id: string; customId: string; projectName: string; capacityKw: number; status: string }[] } | null>(null);
   const x: P | undefined = q.data?.project;
   const go = (pathname: string, params?: Record<string, string>) => router.push({ pathname: pathname as never, params });
 
@@ -36,9 +41,27 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
     try { await api.updateProject(id, { status }); haptic.success(); toast(`Moved to ${status}`); void q.refresh(); } catch (e: any) { toast(e.message, 'error'); }
   };
   const del = () => {
-    const run = async () => { try { await api.deleteProject(id); toast('Moved to recycle bin'); router.back(); } catch (e: any) { toast(e.message, 'error'); } };
+    const run = async () => {
+      try { await api.deleteProject(id); toast('Moved to recycle bin'); router.back(); }
+      catch (e: any) {
+        // Blocked by money / records: if it's a duplicate, offer to move them to the project being kept.
+        const preview = e.status === 409 ? await care.mergePreview(id).catch(() => null) : null;
+        if (preview?.targets.length) { setMerge({ error: e.message, targets: preview.targets }); setSheet('merge'); } else toast(e.message, 'error');
+      }
+    };
     if (Platform.OS === 'web') { if (globalThis.confirm('Delete this project?\n\nIt moves to the recycle bin for 30 days.')) void run(); return; }
-    Alert.alert('Delete project?', 'It moves to the recycle bin for 30 days. Projects with payments or invoices cannot be deleted.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void run() }]);
+    Alert.alert('Delete project?', 'It moves to the recycle bin for 30 days. If it still has payments or other records, you can move them to the right project first.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void run() }]);
+  };
+  const remind = async (again = false): Promise<void> => {
+    try { const r = await care.sendPaymentReminder(id, again); toast(r.message); }
+    catch (e: any) {
+      if (e.code === 'RECENTLY_REMINDED') {
+        if (Platform.OS === 'web') { if (globalThis.confirm(e.message)) return remind(true); return; }
+        Alert.alert('Already reminded', e.message, [{ text: 'Cancel', style: 'cancel' }, { text: 'Send again', onPress: () => void remind(true) }]);
+        return;
+      }
+      toast(e.message, 'error');
+    }
   };
   const menu = () => actions({
     title: x?.projectName,
@@ -48,6 +71,8 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
       can('payments.create') && { label: 'Record payment', icon: <IndianRupee size={20} color={p.accentText} />, onPress: () => go('/payment-form', { projectId: id, customerId: x!.customerId }) },
       can('expenses.create') && { label: 'Log expense', icon: <CircleDollarSign size={20} color={p.accentText} />, onPress: () => go('/expense-form', { projectId: id, customerId: x!.customerId }) },
       can('invoices.create') && { label: 'Issue invoice', icon: <ReceiptText size={20} color={p.accentText} />, onPress: () => go('/invoice-form', { projectId: id, customerId: x!.customerId }) },
+      can('payments.create') && Number(x?.pendingBalance) > 0 && { label: 'Send payment reminder', icon: <BellRing size={20} color={p.accentText} />, onPress: () => void remind() },
+      can('projects.edit') && { label: 'Change customer', icon: <Users size={20} color={p.accentText} />, onPress: () => setSheet('customer') },
       can('projects.delete') && { label: 'Delete project', destructive: true, icon: <Trash2 size={20} color={p.red} />, onPress: del },
     ].filter(Boolean) as any,
   });
@@ -88,6 +113,14 @@ export function ProjectDetail({ id, initialTab }: { id: string; initialTab?: str
           {tab === 'files' ? <Files x={x} data={q.data} isCustomer={isCustomer} /> : null}
         </>
       )}
+      <FormSheet visible={sheet === 'customer'} title="Change customer" submit="Move project" onClose={() => setSheet(null)}
+        note="For a project booked under the wrong customer. Its payments, invoices, warranties, tickets and documents move too."
+        fields={[{ key: 'customerId', label: 'Right customer', type: 'select', load: loadCustomers, queryKey: 'customers-all', required: true }]}
+        onSubmit={async (v) => { const r = await care.changeProjectCustomer(id, v.customerId); toast(r.message); setSheet(null); void q.refresh(); }} />
+      <FormSheet visible={sheet === 'merge' && !!merge} title="Move & delete duplicate" submit="Move & delete" destructive onClose={() => setSheet(null)}
+        note={`${merge?.error || ''}\n\nIf this project is a duplicate, its payments, expenses, documents and tickets move to the project you keep, and this one goes to the recycle bin.`}
+        fields={[{ key: 'targetId', label: 'Project to keep', type: 'select', required: true, options: (merge?.targets || []).map((t) => ({ value: t.id, label: `${t.projectName} (${t.customId})`, subtitle: `${t.capacityKw} kW · ${t.status}` })) }]}
+        onSubmit={async (v) => { const r = await care.mergeProject(id, v.targetId); toast(r.message); setSheet(null); router.back(); }} />
       <Sheet visible={stageSheet} onClose={() => setStageSheet(false)} title="Project stage">
         <View style={{ paddingHorizontal: GUTTER }}>
           <Section>
@@ -146,6 +179,8 @@ function Money({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
   const total = Number(x.finalDealAmount || x.dealAmount || 0);
   const go = (pathname: string, params?: Record<string, string>) => router.push({ pathname: pathname as never, params });
   const expenses: any[] = data?.expenses || [];
+  const approvedCost = expenses.filter((e) => (e.approvalStatus || 'Approved') === 'Approved').reduce((s, e) => s + Number(e.amount || 0), 0);
+  const pendingCost = expenses.filter((e) => e.approvalStatus === 'Pending').reduce((s, e) => s + Number(e.amount || 0), 0);
   return (
     <>
       <MoneySummary total={total} paid={Number(x.totalReceived || 0)} />
@@ -171,8 +206,10 @@ function Money({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
         </Section>
       ) : null}
       {!isCustomer && can('expenses.view') ? (
-        <Section header={`Expenses · ${formatINR(expenses.reduce((s, e) => s + Number(e.amount || 0), 0))}`}>
-          {expenses.slice(0, 8).map((e) => <Row key={e.id} title={e.expenseName} subtitle={`${e.expenseCategory} · ${formatDate(e.date)}`} value={formatINR(e.amount)} accessory={e.approvalStatus && e.approvalStatus !== 'Approved' ? <Badge text={e.approvalStatus} /> : undefined} />)}
+        <Section header={`Expenses · ${formatINR(approvedCost)}`} footer={pendingCost > 0 ? `+ ${formatINR(pendingCost)} awaiting approval (not counted yet).` : undefined}>
+          {expenses.slice(0, 8).map((e) => <Row key={e.id} title={e.expenseName} subtitle={`${e.expenseCategory} · ${formatDate(e.date)}`} value={formatINR(e.amount)}
+            accessory={e.adjustmentOfId ? <Badge text="Reversal" tone="gray" /> : e.approvalStatus && e.approvalStatus !== 'Approved' ? <Badge text={e.approvalStatus} /> : undefined}
+            onPress={!e.adjustmentOfId && ((e.approvalStatus || 'Approved') === 'Approved' ? can('financials.approve') : can('expenses.create')) ? () => go('/expense-form', { id: e.id, customId: e.customId }) : undefined} />)}
           {can('expenses.create') ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Add expense" action chevron={false} onPress={() => go('/expense-form', { projectId: x.id, customerId: x.customerId })} /> : null}
         </Section>
       ) : null}
@@ -181,7 +218,7 @@ function Money({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
           <T variant="headline">Profit</T>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View><T variant="footnote" color="secondary">Cost so far</T><T variant="title3" num>{formatINR(x.totalCost)}</T></View>
-            <View style={{ alignItems: 'flex-end' }}><T variant="footnote" color="secondary">Profit · {Number(x.profitMargin || 0).toFixed(1)}%</T><T variant="title3" num color={Number(x.actualProfit) >= 0 ? 'green' : 'red'}>{formatINR(x.actualProfit)}</T></View>
+            <View style={{ alignItems: 'flex-end' }}><T variant="footnote" color="secondary">{Number(x.pendingBalance) > 0 ? 'Expected profit' : 'Profit'} · {Number(x.profitMargin || 0).toFixed(1)}%{Number(x.taxGst) ? ' · excl. GST' : ''}</T><T variant="title3" num color={Number(x.actualProfit) >= 0 ? 'green' : 'red'}>{formatINR(x.actualProfit)}</T></View>
           </View>
           <Progress value={total ? Number(x.totalCost || 0) / total : 0} tone="orange" />
         </Card>
@@ -279,7 +316,8 @@ function Discom({ projectId, editable }: { projectId: string; editable: boolean 
       <Card style={{ gap: space.m }}>
         <View>
           <T variant="headline">Net-metering & subsidy</T>
-          <T variant="footnote" color="secondary">{stages.filter((s) => s.status === 'Approved').length} of {DISCOM_STAGES.length} approved{editable ? ' · tap a stage to update' : ''}</T>
+          <T variant="footnote" color="secondary">{stages.filter((s) => s.status === 'Approved').length} of {DISCOM_STAGES.length} approved{(q.data as any)?.netMeteringStatus ? ` · ${(q.data as any).netMeteringStatus}` : ''}{editable ? ' · tap a stage to update' : ''}</T>
+          {!stages.length ? <T variant="footnote" color="secondary">{editable ? 'No step recorded yet. The customer sees these same steps in their portal.' : 'Your installer updates these steps as the electricity board approves each stage.'}</T> : null}
         </View>
         <Timeline
           steps={DISCOM_STAGES.map((n, i) => {
@@ -312,8 +350,7 @@ function DiscomSheet({ projectId, open, onClose, onSaved }: { projectId: string;
     setBusy(true);
     try {
       const approvalDate = d.status === 'Approved' ? d.approvalDate || new Date().toISOString().slice(0, 10) : d.approvalDate || undefined;
-      if (open.stage) await api.updateDiscomStageStatus(open.stage.id, { status: d.status, approvalDate, remarks: d.remarks });
-      else await api.createDiscomStage(projectId, { stageName: open.name as any, status: d.status, applicationReferenceNo: d.applicationReferenceNo, submissionDate: d.submissionDate || undefined, approvalDate, discomOfficerName: d.discomOfficerName, remarks: d.remarks });
+      await care.saveDiscomStage(projectId, open.name, { status: d.status, applicationReferenceNo: d.applicationReferenceNo, submissionDate: d.submissionDate || null, approvalDate: approvalDate || null, discomOfficerName: d.discomOfficerName, remarks: d.remarks });
       haptic.success();
       toast('Stage updated');
       onSaved();
@@ -324,11 +361,11 @@ function DiscomSheet({ projectId, open, onClose, onSaved }: { projectId: string;
       <View style={{ paddingHorizontal: GUTTER, gap: space.m }}>
         <FormSection>
           <SelectField label="Status" value={d.status} options={DSTATUS.map((s) => ({ value: s, label: s }))} onChange={(o) => o && setD({ ...d, status: o.value as DiscomStageStatus })} />
-          {!open?.stage ? <TextField label="Application / reference no." value={d.applicationReferenceNo} onChange={(v) => setD({ ...d, applicationReferenceNo: v })} /> : null}
-          {!open?.stage ? <DateField label="Submitted on" value={d.submissionDate} onChange={(v) => setD({ ...d, submissionDate: v })} /> : null}
+          <TextField label="Application / reference no." value={d.applicationReferenceNo} onChange={(v) => setD({ ...d, applicationReferenceNo: v })} />
+          <DateField label="Submitted on" value={d.submissionDate} onChange={(v) => setD({ ...d, submissionDate: v })} />
           {d.status === 'Approved' ? <DateField label="Approved on" value={d.approvalDate} onChange={(v) => setD({ ...d, approvalDate: v })} /> : null}
-          {!open?.stage ? <TextField label="DISCOM officer" kind="name" value={d.discomOfficerName} onChange={(v) => setD({ ...d, discomOfficerName: v })} /> : null}
-          <TextField label="Remarks" value={d.remarks} onChange={(v) => setD({ ...d, remarks: v })} multiline />
+          <TextField label="DISCOM officer" kind="name" value={d.discomOfficerName} onChange={(v) => setD({ ...d, discomOfficerName: v })} />
+          <TextField label="Note (the customer can see this)" value={d.remarks} onChange={(v) => setD({ ...d, remarks: v })} multiline />
         </FormSection>
       </View>
     </Sheet>
@@ -347,7 +384,7 @@ function Files({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
   return (
     <>
       <Section header={`Documents · ${docs.length}`}>
-        {docs.map((d) => <Row key={d.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={d.name || d.fileName} subtitle={[d.category, formatDate(d.createdAt)].filter(Boolean).join(' · ')} onPress={() => void open(d.fileId)} />)}
+        {docs.map((d) => <Row key={d.id} icon={<IconTile icon={<FileText size={17} color={p.purple} />} tone="purple" />} title={d.name || d.fileName} subtitle={[d.category, formatDate(d.createdAt)].filter(Boolean).join(' · ')} accessory={d.visibleToCustomer === false ? <Badge text="Internal" tone="orange" /> : undefined} onPress={() => void open(d.fileId)} />)}
         {can('documents.create') && !isCustomer ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Upload document or photo" action chevron={false} onPress={() => router.push({ pathname: '/document-form', params: { projectId: x.id, customerId: x.customerId } })} /> : null}
         {!docs.length && (isCustomer || !can('documents.create')) ? <Row title="No documents yet" /> : null}
       </Section>
@@ -355,10 +392,58 @@ function Files({ x, data, isCustomer }: { x: P; data: any; isCustomer: boolean }
         {warranties.map((w) => <Row key={w.id} icon={<IconTile icon={<ShieldCheck size={17} color={p.blue} />} tone="blue" />} title={w.itemType || w.equipmentType || 'Warranty'} subtitle={`${[w.brand, w.model].filter(Boolean).join(' ')} · until ${formatDate(w.warrantyEndDate || w.expiryDate)}`} onPress={() => router.push({ pathname: '/warranty/[id]', params: { id: w.id } })} />)}
         {can('warranties.create') && !isCustomer ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Add warranty card" action chevron={false} onPress={() => router.push({ pathname: '/warranty-form', params: { projectId: x.id, customerId: x.customerId } })} /> : null}
       </Section>
+      <Visits projectId={x.id} isCustomer={isCustomer} />
       <Section header={`Service tickets · ${tickets.length}`}>
         {tickets.map((t) => <Row key={t.id} icon={<IconTile icon={<Wrench size={17} color={p.red} />} tone="red" />} title={t.title || t.category} subtitle={`${t.customId} · ${formatDate(t.createdAt)}`} accessory={<Badge text={t.status} />} onPress={() => router.push({ pathname: '/ticket/[id]', params: { id: t.id } })} />)}
         <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title={isCustomer ? 'Get help with this system' : 'New service ticket'} action chevron={false} onPress={() => router.push({ pathname: '/ticket-form', params: { projectId: x.id, customerId: x.customerId } })} />
       </Section>
+    </>
+  );
+}
+
+/** Cleaning / maintenance visits for the project (customers see the upcoming ones). */
+function Visits({ projectId, isCustomer }: { projectId: string; isCustomer: boolean }) {
+  const p = useTheme();
+  const { hasPermission: can } = useAuth();
+  const { toast, actions } = useOverlay();
+  const q = useQuery({ queryKey: ['visits', projectId], queryFn: () => care.visits({ projectId }) });
+  const [sheet, setSheet] = useState<null | 'plan' | { move: MaintenanceVisit } | { assign: MaintenanceVisit }>(null);
+  const manage = can('complaints.manage') && !isCustomer;
+  const today = new Date().toISOString().slice(0, 10);
+  const visits = (q.data?.visits || []).filter((v) => !isCustomer || v.status === 'Scheduled');
+  if (!visits.length && !manage) return null;
+  const act = async (v: MaintenanceVisit, body: Record<string, unknown>, ok: string) => { try { await care.updateVisit(v.id, body); toast(ok); void q.refetch(); } catch (e: any) { toast(e.message, 'error'); } };
+  const menu = (v: MaintenanceVisit) => actions({ title: `${formatDate(v.dueDate)} · ${v.visitType}`, items: [
+    v.status === 'Scheduled' && { label: 'Mark done', onPress: () => void act(v, { status: 'Done' }, 'Marked done') },
+    v.status === 'Scheduled' && { label: 'Skip', onPress: () => void act(v, { status: 'Skipped' }, 'Skipped') },
+    v.status !== 'Scheduled' && { label: 'Reopen', onPress: () => void act(v, { status: 'Scheduled' }, 'Reopened') },
+    { label: 'Move to another date', onPress: () => setSheet({ move: v }) },
+    { label: 'Assign', onPress: () => setSheet({ assign: v }) },
+    { label: 'Remove', destructive: true, onPress: async () => { try { await care.deleteVisit(v.id); void q.refetch(); } catch (e: any) { toast(e.message, 'error'); } } },
+  ].filter(Boolean) as any });
+  const moving = sheet && typeof sheet === 'object' && 'move' in sheet ? sheet.move : null;
+  const assigning = sheet && typeof sheet === 'object' && 'assign' in sheet ? sheet.assign : null;
+  return (
+    <>
+      <Section header={`Maintenance visits · ${visits.length}`} footer={isCustomer ? 'To change a visit date, call your installer.' : undefined}>
+        {visits.map((v) => (
+          <Row key={v.id} icon={<IconTile icon={<CalendarClock size={17} color={p.teal} />} tone="teal" />} title={`${formatDate(v.dueDate)} · ${v.visitType}`}
+            subtitle={[v.status !== 'Scheduled' ? `${v.status}${v.doneDate ? ` ${formatDate(v.doneDate)}` : ''}` : '', v.assignedStaff ? `Assigned: ${v.assignedStaff}` : '', v.notes || ''].filter(Boolean).join(' · ') || undefined}
+            accessory={v.status === 'Scheduled' && v.dueDate < today ? <Badge text="Overdue" tone="red" /> : undefined}
+            onPress={manage ? () => menu(v) : undefined} />
+        ))}
+        {manage ? <Row icon={<IconTile icon={<Plus size={17} color={p.accentText} />} />} title="Plan visits" action chevron={false} onPress={() => setSheet('plan')} /> : null}
+      </Section>
+      <FormSheet visible={sheet === 'plan'} title="Plan maintenance visits" submit="Plan visits" onClose={() => setSheet(null)} note="Leave the start date empty to count from the project's completion (or today)."
+        initial={{ everyMonths: '6', count: '10', visitType: 'Cleaning & check-up' }}
+        fields={[{ key: 'everyMonths', label: 'Every (months)', type: 'number', required: true }, { key: 'count', label: 'How many visits', type: 'number', required: true }, { key: 'start', label: 'Counting from', type: 'date' }, { key: 'visitType', label: 'Visit' }]}
+        onSubmit={async (v) => { const r = await care.planVisits(projectId, { everyMonths: Number(v.everyMonths), count: Number(v.count), start: v.start || undefined, visitType: v.visitType || undefined }); toast(`${r.dates.length} visits planned`); setSheet(null); void q.refetch(); }} />
+      <FormSheet visible={!!moving} title="Move visit" submit="Save" onClose={() => setSheet(null)} initial={{ dueDate: moving?.dueDate || '' }}
+        fields={[{ key: 'dueDate', label: 'New date', type: 'date', required: true }]}
+        onSubmit={async (v) => { await care.updateVisit(moving!.id, { dueDate: v.dueDate, status: 'Scheduled' }); toast('Visit moved'); setSheet(null); void q.refetch(); }} />
+      <FormSheet visible={!!assigning} title="Assign visit" submit="Save" onClose={() => setSheet(null)} initial={{ assignedStaff: assigning?.assignedStaff || '' }}
+        fields={[{ key: 'assignedStaff', label: 'Who will go (name or username)' }]}
+        onSubmit={async (v) => { await care.updateVisit(assigning!.id, { assignedStaff: v.assignedStaff }); toast('Assigned'); setSheet(null); void q.refetch(); }} />
     </>
   );
 }

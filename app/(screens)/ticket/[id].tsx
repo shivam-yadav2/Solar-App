@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Image, Linking, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Platform, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -7,11 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowUp, Lock, UserRound, Zap, Paperclip } from 'lucide-react-native';
 import { api } from '../../../src/lib/api';
 import { ops } from '../../../src/lib/apis/ops';
+import { care } from '../../../src/lib/apis/care';
 import { useApi } from '../../../src/lib/query';
 import { useAuth } from '../../../src/context/AuthContext';
 import { formatDateTime } from '../../../src/lib/formatters';
 import {
-  Badge, Button, ErrorState, FormSection, GUTTER, IconTile, ListSkeleton, Row, Screen, Section, SelectField, Sheet, space, T, Tap, TextField, useOverlay, useTheme, radius, type, haptic,
+  Badge, Button, DateField, ErrorState, FormSection, GUTTER, IconTile, ListSkeleton, Row, Screen, Section, SelectField, Sheet, space, T, Tap, TextField, useOverlay, useTheme, radius, type, haptic,
 } from '../../../src/ds';
 import type { ComplaintStatus } from '../../../src/types';
 
@@ -66,6 +67,7 @@ export default function TicketDetail() {
                 <Badge text={c.status} size="m" /><Badge text={c.priority} tone={c.priority === 'High' || c.priority === 'Critical' ? 'red' : 'gray'} size="m" /><Badge text={c.complaintType} tone="gray" size="m" />
               </View>
               {c.assignedStaff ? <T variant="footnote" color="secondary">Assigned to {c.assignedStaff}</T> : null}
+              {c.scheduledVisitDate ? <T variant="footnote" color="secondary">Visit on {formatDateTime(c.scheduledVisitDate).split(',')[0]}</T> : null}
             </View>
             {!isCustomer ? (
               <Section>
@@ -121,25 +123,31 @@ export default function TicketDetail() {
           </View>
         </KeyboardStickyView>
       ) : null}
-      {c ? <UpdateSheet visible={edit} complaint={c} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); void q.refresh(); }} /> : null}
+      {c ? <UpdateSheet visible={edit} complaint={c} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); void q.refresh(); }} onDeleted={() => { setEdit(false); router.back(); }} /> : null}
     </View>
   );
 }
 
-function UpdateSheet({ visible, complaint, onClose, onSaved }: { visible: boolean; complaint: any; onClose: () => void; onSaved: () => void }) {
+function UpdateSheet({ visible, complaint, onClose, onSaved, onDeleted }: { visible: boolean; complaint: any; onClose: () => void; onSaved: () => void; onDeleted: () => void }) {
   const { toast } = useOverlay();
   const staff = useQuery({ queryKey: ['users', 'staff'], queryFn: api.getStaffUsers, enabled: visible, staleTime: 5 * 60_000 });
   const [status, setStatus] = useState<ComplaintStatus>(complaint.status);
   const [assigned, setAssigned] = useState(complaint.assignedStaff || '');
   const [resolution, setResolution] = useState(complaint.resolution || '');
   const [remark, setRemark] = useState('');
+  const [visit, setVisit] = useState('');
   const [busy, setBusy] = useState(false);
-  React.useEffect(() => { if (visible) { setStatus(complaint.status); setAssigned(complaint.assignedStaff || ''); setResolution(complaint.resolution || ''); setRemark(''); } }, [visible, complaint]);
+  React.useEffect(() => { if (visible) { setStatus(complaint.status); setAssigned(complaint.assignedStaff || ''); setResolution(complaint.resolution || ''); setRemark(''); setVisit(String(complaint.scheduledVisitDate || '').slice(0, 10)); } }, [visible, complaint]);
+  const del = () => {
+    const run = async () => { try { const r = await care.deleteTicket(complaint.id); toast(r.message); onDeleted(); } catch (e: any) { toast(e.message, 'error'); } };
+    if (Platform.OS === 'web') { if (globalThis.confirm('Delete this ticket? Only for one raised by mistake or twice. It stays in the recycle bin for 30 days.')) void run(); return; }
+    Alert.alert('Delete this ticket?', 'Only for one raised by mistake or twice. It stays in the recycle bin for 30 days.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void run() }]);
+  };
   const save = async () => {
     if ((status === 'Resolved' || status === 'Closed') && !resolution.trim()) { toast('Write how it was fixed', 'error'); return; }
     setBusy(true);
     try {
-      await ops.updateComplaint(complaint.id, { status, assignedStaff: assigned, resolution, remark: remark || undefined } as any);
+      await ops.updateComplaint(complaint.id, { status, assignedStaff: assigned, resolution, remark: remark || undefined, scheduledVisitDate: visit || null } as any);
       haptic.success(); toast('Ticket updated'); onSaved();
     } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
   };
@@ -151,8 +159,10 @@ function UpdateSheet({ visible, complaint, onClose, onSaved }: { visible: boolea
           <SelectField label="Status" value={status} options={STATUSES.map((s) => ({ value: s, label: s }))} onChange={(o) => o && setStatus(o.value as ComplaintStatus)} />
           <SelectField label="Technician" value={assigned} display={assigned} options={people} allowClear onChange={(o) => setAssigned(o?.value || '')} placeholder="Not assigned" />
           {status === 'Resolved' || status === 'Closed' ? <TextField label="How it was fixed" value={resolution} onChange={setResolution} multiline /> : null}
+          <DateField label="Technician visit" value={visit} onChange={setVisit} placeholder="Not booked" />
           <TextField label="Note for the timeline" value={remark} onChange={setRemark} placeholder="Optional" />
         </FormSection>
+        <Button title="Delete ticket" kind="plain" onPress={del} />
       </View>
     </Sheet>
   );

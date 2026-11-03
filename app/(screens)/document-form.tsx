@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
 import { loadProjects } from '../../src/lib/pickers';
 import { AttachField, Attached } from '../../src/components/AttachField';
-import { Button, FormSection, Screen, SelectField, TextField, haptic, useOverlay, useUnsavedChanges } from '../../src/ds';
+import { Button, FormSection, Screen, SelectField, TextField, ToggleField, haptic, useOverlay, useUnsavedChanges } from '../../src/ds';
 import type { ProjectDocumentCategory } from '../../src/types';
 
 const CATEGORIES: ProjectDocumentCategory[] = ['Agreement', 'Quotation', 'Installation Report', 'Site Survey', 'UPPCL Document', 'Net Metering', 'Completion Certificate', 'Payment Receipt', 'Other'];
@@ -18,6 +18,13 @@ export default function DocumentFormScreen() {
   const [file, setFile] = useState<Attached | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [internal, setInternal] = useState(false);
+  // Opened from a project: start with that project chosen.
+  const params = useLocalSearchParams<{ projectId?: string; customerId?: string }>();
+  useEffect(() => {
+    if (!params.projectId) return;
+    api.getProject(params.projectId).then((r) => { setProject({ value: r.project.id, label: r.project.projectName }); setCustomerId(r.project.customerId); }).catch(() => {});
+  }, [params.projectId]);
   const dirty = !!project || !!name || !!file || category !== 'Other';
   const allowLeave = useUnsavedChanges(dirty && !saving);
   const save = async () => {
@@ -29,8 +36,8 @@ export default function DocumentFormScreen() {
     if (Object.keys(next).length || !project || !file) { haptic.error(); return; }
     setSaving(true);
     try {
-      await api.createDocument({ projectId: project.value, customerId, name: name.trim(), category, fileId: file.fileId, fileName: file.fileName, fileSize: file.fileSize, fileMime: file.mimeType || 'application/octet-stream' });
-      toast('Document uploaded');
+      await api.createDocument({ projectId: project.value, customerId, name: name.trim(), category, fileId: file.fileId, fileName: file.fileName, fileSize: file.fileSize, fileMime: file.mimeType || 'application/octet-stream', visibleToCustomer: !internal } as any);
+      toast(internal ? 'Uploaded — staff only' : 'Document uploaded');
       allowLeave();
       router.back();
     } catch (e: any) { toast(e.message || 'Could not save this document', 'error'); } finally { setSaving(false); }
@@ -50,6 +57,7 @@ export default function DocumentFormScreen() {
         <TextField label="Document name" value={name} onChange={setName} placeholder="e.g. Net meter approval" required error={errors.name} />
         <SelectField label="Category" value={category} options={CATEGORIES.map((value) => ({ value, label: value }))} onChange={(option) => option && setCategory(option.value as ProjectDocumentCategory)} />
         <AttachField label="Photo or file" value={file} onChange={(value) => { setFile(value); if (value && !name) setName(value.fileName.replace(/\.[^.]+$/, '')); }} hint={errors.file || 'PDF, image, Word document or any supported project file.'} />
+        <ToggleField label="Internal only" value={internal} onChange={setInternal} hint="Staff can see it; it won't appear in the customer's portal (ID proofs, vendor bills, notes)." />
       </FormSection>
       <Button title="Upload document" loading={saving} onPress={save} full />
     </Screen>

@@ -34,8 +34,10 @@ export default function PayrollScreen() {
     const result: any = await api.getEmployees({ page: String(page), limit: String(limit), search, status });
     return toPage(result.employees, result, page);
   }, 30, { enabled: mode === 'employees' });
+  const [outstanding, setOutstanding] = useState<{ employeeName: string; amount: number; count: number }[]>([]);
   const advances = usePaged<any>(['payroll', 'advances', recovered], async (page, limit) => {
     const result: any = await api.getSalaryAdvances({ page: String(page), limit: String(limit), ...(recovered === 'all' ? {} : { isRecovered: recovered }) });
+    if (page === 1) setOutstanding(Object.values(result.outstanding || {}));
     return toPage(result.advances, result, page);
   }, 30, { enabled: mode === 'advances' });
   const list = mode === 'payroll' ? payroll : mode === 'employees' ? employees : advances;
@@ -73,6 +75,9 @@ export default function PayrollScreen() {
         {mode !== 'advances' ? <SearchBar value={text} onChange={setText} onSearch={setSearch} placeholder={mode === 'payroll' ? 'Employee, voucher or role' : 'Name, ID, phone or role'} /> : null}
         {mode === 'payroll' ? <Chips value={status} onChange={setStatus} options={['All', 'Pending', 'Processing', 'Paid'].map((value) => ({ value, label: value }))} /> : null}
         {mode === 'employees' ? <Chips value={status} onChange={setStatus} options={['All', 'Active', 'On Leave', 'Inactive', 'Terminated'].map((value) => ({ value, label: value }))} /> : null}
+        {mode === 'advances' && outstanding.length ? <Section header={`Still to recover · ${formatMoneyCompact(outstanding.reduce((t, o) => t + Number(o.amount || 0), 0))}`} footer="Taken from the salary of the recovery month, or the next salary entry if that month was missed.">
+          {outstanding.map((o) => <InfoRow key={o.employeeName} label={o.employeeName} value={`${formatMoneyCompact(Number(o.amount))}${o.count > 1 ? ` (${o.count})` : ''}`} />)}
+        </Section> : null}
         {mode === 'advances' ? <Chips value={recovered} onChange={setRecovered} options={[{ value: 'all', label: 'All' }, { value: 'false', label: 'Pending' }, { value: 'true', label: 'Recovered' }]} /> : null}
         {can('payroll.manage') && mode === 'payroll' ? <View style={{ flexDirection: 'row', gap: space.s }}><Button title="Run this month" kind="gray" onPress={runBatch} style={{ flex: 1 }} /><Button title="Export" kind="gray" icon={<Download size={17} color={p.label} />} onPress={() => void exportData()} style={{ flex: 1 }} /></View> : <Button title="Export current list" kind="gray" icon={<Download size={17} color={p.label} />} onPress={() => void exportData()} full />}
         {list.loading ? <ListSkeleton /> : list.error ? <ErrorState message={list.error} onRetry={list.refresh} /> : null}

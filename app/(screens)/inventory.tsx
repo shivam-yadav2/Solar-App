@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowDownToLine, ArrowUpFromLine, Boxes, PackageMinus, Plus, Undo2 } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
+import { care } from '../../src/lib/apis/care';
 import { useApi } from '../../src/lib/query';
 import { useAuth } from '../../src/context/AuthContext';
 import { loadProjects } from '../../src/lib/pickers';
@@ -83,6 +84,7 @@ export default function InventoryScreen() {
 
 function ItemSheet({ item, onClose, onChanged }: { item: InventoryItem | null; onClose: () => void; onChanged: () => void }) {
   const p = useTheme();
+  const router = useRouter();
   const { hasPermission: can } = useAuth();
   const { toast } = useOverlay();
   const [type, setType] = useState<StockMovementType | null>(null);
@@ -123,6 +125,18 @@ function ItemSheet({ item, onClose, onChanged }: { item: InventoryItem | null; o
             {can('inventory.manage') ? (
               <Section>
                 {MOVES.map((m) => { const Icon = m.icon; return <Row key={m.type} icon={<IconTile icon={<Icon size={17} color={p[m.tone]} />} tone={m.tone} />} title={m.label} onPress={() => setType(m.type)} />; })}
+              </Section>
+            ) : null}
+            {can('inventory.manage') ? (
+              <Section footer="Sending stock to a site adds it to that project's cost; a return takes it back off. Stock itself only changes through these movements.">
+                <Row title="Edit item details" onPress={() => { onClose(); router.push({ pathname: '/inventory-form', params: { id: item.id } }); }} />
+                <Row title="Delete item" destructive chevron={false} onPress={async () => {
+                  try { await care.deleteInventoryItem(item.id); toast('Item deleted'); onChanged(); }
+                  catch (e: any) {
+                    if (e.status === 409) { try { await care.updateInventoryItem(item.id, { isActive: false }); toast('It has stock history, so it was deactivated instead'); onChanged(); } catch (x: any) { toast(x.message, 'error'); } }
+                    else toast(e.message, 'error');
+                  }
+                }} />
               </Section>
             ) : null}
           </>

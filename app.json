@@ -3,7 +3,7 @@
     "name": "SolarOS",
     "slug": "solaros-mobile",
     "scheme": "solaros",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/branding/brand-app-icon-v3.png",
     "userInterfaceStyle": "automatic",
@@ -11,12 +11,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.solaros.mobile",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "icon": "./assets/branding/brand-app-icon-v3.png"
     },
     "android": {
       "package": "com.solaros.mobile",
-      "versionCode": 4,
+      "versionCode": 5,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#071426",

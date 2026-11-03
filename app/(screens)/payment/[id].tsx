@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CheckCircle2, Ellipsis, Pencil, RotateCcw, TriangleAlert, UserRound, Zap } from 'lucide-react-native';
+import { ArrowRightLeft, CheckCircle2, Ellipsis, Pencil, RotateCcw, Trash2, TriangleAlert, UserRound, Zap } from 'lucide-react-native';
+import { care } from '../../../src/lib/apis/care';
+import { loadProjects } from '../../../src/lib/pickers';
+import { FormSheet } from '../../../src/components/FormSheet';
 import { ops } from '../../../src/lib/apis/ops';
 import { useApi } from '../../../src/lib/query';
 import { useAuth } from '../../../src/context/AuthContext';
@@ -14,9 +17,9 @@ export default function PaymentDetail() {
   const router = useRouter();
   const p = useTheme();
   const { user, hasPermission: can } = useAuth();
-  const { actions } = useOverlay();
+  const { actions, toast } = useOverlay();
   const q = useApi(['payments', 'detail', id], () => ops.payment(id!), { enabled: !!id });
-  const [sheet, setSheet] = useState<null | 'refund' | 'reconcile'>(null);
+  const [sheet, setSheet] = useState<null | 'refund' | 'reconcile' | 'move' | 'delete'>(null);
   const isCustomer = user?.role === 'CUSTOMER';
   const x = q.data?.payment;
   const refunded = (q.data?.adjustments || []).reduce((s, a) => s + Math.abs(Number(a.amount) || 0), 0);
@@ -26,6 +29,8 @@ export default function PaymentDetail() {
       can('payments.create') && { label: 'Edit payment', icon: <Pencil size={20} color={p.accentText} />, onPress: () => router.push({ pathname: '/payment-form', params: { id: x.id } }) },
       can('financials.approve') && { label: 'Reconcile with bank', icon: <CheckCircle2 size={20} color={p.accentText} />, onPress: () => setSheet('reconcile') },
       can('financials.approve') && Number(x?.amount) > 0 && { label: 'Refund…', destructive: true, icon: <RotateCcw size={20} color={p.red} />, onPress: () => setSheet('refund') },
+      can('financials.approve') && !x?.adjustmentOfId && { label: 'Move to another project…', icon: <ArrowRightLeft size={20} color={p.accentText} />, onPress: () => setSheet('move') },
+      can('financials.approve') && x?.reconciliationStatus !== 'Matched' && { label: 'Delete (never received)…', destructive: true, icon: <Trash2 size={20} color={p.red} />, onPress: () => setSheet('delete') },
     ].filter(Boolean) as any,
   });
 
@@ -63,6 +68,14 @@ export default function PaymentDetail() {
         </>
       )}
       {x ? <RefundSheet visible={sheet === 'refund'} max={Number(x.amount) - refunded} id={x.id} onClose={() => setSheet(null)} onDone={() => { setSheet(null); void q.refresh(); }} /> : null}
+      {x ? <FormSheet visible={sheet === 'move'} title="Move payment" submit="Move payment" onClose={() => setSheet(null)}
+        note="For a payment recorded against the wrong project. Its refunds move with it."
+        fields={[{ key: 'projectId', label: 'Project it belongs to', type: 'select', load: loadProjects(), queryKey: 'projects-all', required: true }]}
+        onSubmit={async (v) => { const r = await care.movePayment(x.id, v.projectId); toast(r.message); setSheet(null); void q.refresh(); }} /> : null}
+      {x ? <FormSheet visible={sheet === 'delete'} title="Delete payment" submit="Delete payment" destructive onClose={() => setSheet(null)}
+        note="Only for a payment that was never received or was entered twice. It stays in the recycle bin for 30 days. Money that came back to the customer is a refund instead."
+        fields={[{ key: 'reason', label: 'Why', required: true, placeholder: 'e.g. Entered twice' }]}
+        onSubmit={async (v) => { const r = await care.deletePayment(x.id, v.reason.trim()); toast(r.message); setSheet(null); router.back(); }} /> : null}
       {x ? <ReconcileSheet visible={sheet === 'reconcile'} id={x.id} onClose={() => setSheet(null)} onDone={() => { setSheet(null); void q.refresh(); }} /> : null}
     </Screen>
   );

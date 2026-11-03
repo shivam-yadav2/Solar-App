@@ -598,7 +598,7 @@ export interface WarrantyDocument {
   updatedAt: string;
 }
 
-export type InvoiceType = 'Tax Invoice' | 'Proforma' | 'Advance Receipt' | 'Final Bill';
+export type InvoiceType = 'Tax Invoice' | 'Proforma' | 'Advance Receipt' | 'Final Bill' | 'Credit Note';
 export type InvoiceStatus = 'Issued' | 'Paid' | 'Cancelled';
 
 export interface Invoice {
@@ -724,6 +724,8 @@ export interface ProjectDocument {
   fileSize: number;
   fileMime: string;
   uploadedBy: string;
+  /** Shown in the customer's portal (false = internal, staff only). */
+  visibleToCustomer?: boolean;
   createdAt: string;
   updatedAt: string;
 }

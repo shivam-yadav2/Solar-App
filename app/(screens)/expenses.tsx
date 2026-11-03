@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Linking, Platform, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ClipboardList, Paperclip, Plus, RotateCcw, Trash2, X } from 'lucide-react-native';
+import { Check, ClipboardList, Paperclip, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react-native';
 import { api } from '../../src/lib/api';
 import { ops } from '../../src/lib/apis/ops';
 import { usePaged, toPage } from '../../src/lib/query';
@@ -19,9 +19,11 @@ export default function ExpensesScreen() {
   const router = useRouter();
   const p = useTheme();
   const params = useLocalSearchParams<{ status?: string; projectId?: string }>();
-  const { hasPermission: can } = useAuth();
+  const { user, hasPermission: can } = useAuth();
   const { toast } = useOverlay();
   const approver = can('financials.approve');
+  // Own entries: only when the company's approval setting allows it (or this is the only approver).
+  const canDecide = (x: any) => approver && (x.addedBy !== user?.email || !!summary.canSelfApprove);
   const [mode, setMode] = useState<Mode>(params.status === 'Pending' || approver ? 'Pending' : 'all');
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
@@ -80,7 +82,8 @@ export default function ExpensesScreen() {
                 {x.approvalStatus && x.approvalStatus !== 'Approved' ? <Badge text={x.approvalStatus} /> : null}
               </View>
             </View>
-            {approver && x.approvalStatus === 'Pending' ? (
+            {approver && x.approvalStatus === 'Pending' && !canDecide(x) ? <T variant="caption" color="secondary">Needs another approver (Settings → Preferences → Expense approval)</T> : null}
+            {canDecide(x) && x.approvalStatus === 'Pending' ? (
               <View style={{ flexDirection: 'row', gap: space.s, marginTop: 2 }}>
                 <Button title="Approve" size="s" kind="tinted" icon={<Check size={15} color={p.accentText} />} loading={busy === x.id} onPress={() => void decide(x, 'Approved')} style={{ flex: 1 }} />
                 <Button title="Reject" size="s" kind="destructive" icon={<X size={15} color={p.red} />} onPress={() => setOpen({ ...x, rejecting: true })} style={{ flex: 1 }} />
@@ -90,13 +93,14 @@ export default function ExpensesScreen() {
         </GroupedItem>
       )}
     />
-    <ExpenseSheet x={open} onClose={() => { setOpen(null); void list.refresh(); }} onDecide={decide} />
+    <ExpenseSheet x={open} canDecide={open ? canDecide(open) : false} onClose={() => { setOpen(null); void list.refresh(); }} onDecide={decide} />
     </>
   );
 }
 
-function ExpenseSheet({ x, onClose, onDecide }: { x: any | null; onClose: () => void; onDecide: (x: any, s: 'Approved' | 'Rejected', note?: string) => Promise<void> }) {
+function ExpenseSheet({ x, canDecide, onClose, onDecide }: { x: any | null; canDecide: boolean; onClose: () => void; onDecide: (x: any, s: 'Approved' | 'Rejected', note?: string) => Promise<void> }) {
   const p = useTheme();
+  const router = useRouter();
   const { hasPermission: can } = useAuth();
   const { toast } = useOverlay();
   const [note, setNote] = useState('');
@@ -127,7 +131,7 @@ function ExpenseSheet({ x, onClose, onDecide }: { x: any | null; onClose: () => 
           {x.remark ? <InfoRow label="Remark" value={x.remark} multiline /> : null}
         </Section>
         {x.receiptFileId ? <Button title="View bill / receipt" kind="gray" icon={<Paperclip size={17} color={p.label} />} onPress={async () => { try { await Linking.openURL(await api.getFileUrl(x.receiptFileId)); } catch (e: any) { toast(e.message, 'error'); } }} /> : null}
-        {approver && x.approvalStatus === 'Pending' ? (
+        {canDecide && x.approvalStatus === 'Pending' ? (
           <>
             <FormSection><TextField label={x.rejecting ? 'Reason for rejecting' : 'Note (optional)'} value={note} onChange={setNote} multiline autoFocus={!!x.rejecting} /></FormSection>
             <View style={{ flexDirection: 'row', gap: space.s }}>
@@ -147,6 +151,9 @@ function ExpenseSheet({ x, onClose, onDecide }: { x: any | null; onClose: () => 
               <Button title="Record reversal" kind="destructive" loading={busy} onPress={doReverse} />
             </>
           ) : <Button title="Reverse this expense…" kind="gray" icon={<RotateCcw size={17} color={p.label} />} onPress={() => setReverse(true)} />
+        ) : null}
+        {!x.adjustmentOfId && ((x.approvalStatus || 'Approved') === 'Approved' ? approver : can('expenses.create')) ? (
+          <Button title="Edit" kind="gray" icon={<Pencil size={17} color={p.label} />} onPress={() => { onClose(); router.push({ pathname: '/expense-form', params: { id: x.id, customId: x.customId } }); }} />
         ) : null}
         {can('expenses.delete') && x.approvalStatus !== 'Approved' ? <Button title="Delete" kind="plain" icon={<Trash2 size={17} color={p.red} />} onPress={del} /> : null}
       </View>

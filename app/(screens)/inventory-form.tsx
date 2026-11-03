@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
+import { care } from '../../src/lib/apis/care';
 import { loadProjects } from '../../src/lib/pickers';
 import { Button, FormSection, Screen, SelectField, TextField, haptic, num, useOverlay } from '../../src/ds';
 import type { InventoryCategory } from '../../src/types';
@@ -12,18 +13,32 @@ const UNITS = ['Nos', 'Meter', 'Kg', 'Set', 'Box', 'Roll', 'Pair', 'Litre'];
 /** New stock item, or (mode=boq) a planned material line for a project. */
 export default function InventoryForm() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string; projectId?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; projectId?: string; id?: string }>();
+  const editing = !!params.id;
   const { toast } = useOverlay();
   const boq = params.mode === 'boq';
   const [f, setF] = useState({ itemName: '', itemCode: '', category: 'Other' as InventoryCategory, brand: '', modelNumber: '', unitOfMeasure: 'Nos', currentStock: '', minimumReorderLevel: '', costPricePerUnit: '', sellingPricePerUnit: '', hsnCode: '', gstRatePercent: '12', warehouseLocation: '', plannedQuantity: '', unitCostEstimate: '', notes: '' });
   const [project, setProject] = useState<{ value: string; label: string } | null>(params.projectId ? { value: params.projectId, label: '' } : null);
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!params.id) return;
+    api.getInventory().then((r) => {
+      const i = r.items.find((x) => x.id === params.id);
+      if (i) setF((s) => ({ ...s, itemName: i.itemName, itemCode: i.itemCode || '', category: i.category, brand: i.brand || '', modelNumber: i.modelNumber || '', unitOfMeasure: i.unitOfMeasure, currentStock: String(i.currentStock), minimumReorderLevel: String(i.minimumReorderLevel ?? ''), costPricePerUnit: String(i.costPricePerUnit ?? ''), sellingPricePerUnit: String(i.sellingPricePerUnit ?? ''), hsnCode: i.hsnCode || '', gstRatePercent: String(i.gstRatePercent ?? ''), warehouseLocation: i.warehouseLocation || '' }));
+    }).catch((e) => toast(e.message, 'error'));
+  }, [params.id]);
   const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
   const save = async () => {
     if (!f.itemName.trim()) { toast('Enter the item name', 'error'); haptic.error(); return; }
     if (boq && (!project || num(f.plannedQuantity) <= 0)) { toast('Choose the project and planned quantity', 'error'); haptic.error(); return; }
     setSaving(true);
     try {
+      if (editing) {
+        await care.updateInventoryItem(params.id!, { itemName: f.itemName.trim(), category: f.category, brand: f.brand, modelNumber: f.modelNumber, unitOfMeasure: f.unitOfMeasure, minimumReorderLevel: num(f.minimumReorderLevel), costPricePerUnit: num(f.costPricePerUnit), sellingPricePerUnit: num(f.sellingPricePerUnit), hsnCode: f.hsnCode, gstRatePercent: num(f.gstRatePercent), warehouseLocation: f.warehouseLocation });
+        toast('Item updated');
+        router.back();
+        return;
+      }
       if (boq) await api.createProjectBoqItem(project!.value, { itemName: f.itemName.trim(), category: f.category, unit: f.unitOfMeasure, plannedQuantity: num(f.plannedQuantity), unitCostEstimate: num(f.unitCostEstimate), notes: f.notes || undefined });
       else await api.createInventoryItem({ itemName: f.itemName.trim(), itemCode: f.itemCode || undefined, category: f.category, brand: f.brand || undefined, modelNumber: f.modelNumber || undefined, unitOfMeasure: f.unitOfMeasure, currentStock: num(f.currentStock), minimumReorderLevel: num(f.minimumReorderLevel), costPricePerUnit: num(f.costPricePerUnit), sellingPricePerUnit: num(f.sellingPricePerUnit), hsnCode: f.hsnCode || undefined, gstRatePercent: num(f.gstRatePercent), warehouseLocation: f.warehouseLocation || undefined } as any);
       toast(boq ? 'Added to the bill of materials' : 'Item added');
@@ -33,7 +48,7 @@ export default function InventoryForm() {
   const cat = <SelectField label="Category" value={f.category} options={CATS.map((c) => ({ value: c, label: c }))} onChange={(o) => o && setF((s) => ({ ...s, category: o.value as InventoryCategory }))} />;
   const unit = <SelectField label="Unit" value={f.unitOfMeasure} options={UNITS.map((u) => ({ value: u, label: u }))} onChange={(o) => o && setF((s) => ({ ...s, unitOfMeasure: o.value }))} />;
   return (
-    <Screen title={boq ? 'Plan material' : 'New item'} large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
+    <Screen title={boq ? 'Plan material' : editing ? 'Edit item' : 'New item'} large={false} back backLabel="Cancel" right={<Button title="Save" size="s" loading={saving} onPress={save} />}>
       {boq ? (
         <>
           <FormSection><SelectField label="Project" required value={project?.value} display={project?.label} load={loadProjects()} queryKey="projects-all" onChange={(o) => setProject(o)} /></FormSection>
@@ -54,7 +69,7 @@ export default function InventoryForm() {
             <TextField label="Item code" value={f.itemCode} onChange={set('itemCode')} placeholder="Auto if empty" />
           </FormSection>
           <FormSection header="Stock">
-            <View style={{ flexDirection: 'row' }}><View style={{ flex: 1 }}><TextField label="Opening stock" kind="decimal" value={f.currentStock} onChange={set('currentStock')} /></View><View style={{ flex: 1 }}>{unit}</View></View>
+            {editing ? unit : <View style={{ flexDirection: 'row' }}><View style={{ flex: 1 }}><TextField label="Opening stock" kind="decimal" value={f.currentStock} onChange={set('currentStock')} /></View><View style={{ flex: 1 }}>{unit}</View></View>}
             <TextField label="Reorder when below" kind="decimal" value={f.minimumReorderLevel} onChange={set('minimumReorderLevel')} />
             <TextField label="Warehouse / location" value={f.warehouseLocation} onChange={set('warehouseLocation')} />
           </FormSection>

@@ -41,7 +41,7 @@ export default function MoreTab() {
       { label: 'Notifications', icon: Bell, tone: 'gray', path: '/notifications' },
       { label: 'Privacy requests', icon: UserX, tone: 'purple', path: '/privacy', subtitle: 'Request a data copy or deletion' },
       { label: 'SolarOS support', icon: LifeBuoy, tone: 'blue', path: '/support' },
-      { label: 'Help & workflows', icon: CircleHelp, tone: 'accent', path: '/help' },
+      { label: 'Help', icon: CircleHelp, tone: 'accent', path: '/help', subtitle: 'Guide and questions' },
       { label: 'Loan EMI calculator', icon: Calculator, tone: 'orange', path: '/emi' },
     ] },
   ] : isPlatform ? [
@@ -101,7 +101,7 @@ export default function MoreTab() {
     ] },
     { title: 'Support', items: [
       { label: 'SolarOS support', icon: LifeBuoy, tone: 'blue', path: '/support', subtitle: 'Open and track a support ticket' },
-      { label: 'Help & workflows', icon: CircleHelp, tone: 'accent', path: '/help' },
+      { label: 'Help', icon: CircleHelp, tone: 'accent', path: '/help', subtitle: 'Guide and questions' },
     ] },
   ];
 

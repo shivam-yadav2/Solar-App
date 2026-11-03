@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, Platform, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CircleCheck, CircleX, Ellipsis, IndianRupee, UserRound, Zap } from 'lucide-react-native';
+import { CircleCheck, CircleX, Ellipsis, IndianRupee, RotateCcw, UserRound, Zap } from 'lucide-react-native';
+import { care } from '../../../src/lib/apis/care';
+import { num } from '../../../src/ds';
+import { FormSheet } from '../../../src/components/FormSheet';
 import { ops } from '../../../src/lib/apis/ops';
 import { useApi } from '../../../src/lib/query';
 import { useAuth } from '../../../src/context/AuthContext';
@@ -18,6 +21,7 @@ export default function InvoiceDetail() {
   const isCustomer = user?.role === 'CUSTOMER';
   const q = useApi(['invoices', 'detail', id], () => ops.invoice(id!), { enabled: !!id });
   const x = q.data?.invoice;
+  const [creditOpen, setCreditOpen] = useState(false);
   const lines: any[] = x?.lineItems || [];
   const tax = lines.length ? lines.reduce((s, l) => s + Number(l.cgstAmount || 0) + Number(l.sgstAmount || 0) + Number(l.igstAmount || 0), 0) : Number(x?.taxAmount || 0);
   const taxableValue = lines.length ? lines.reduce((sum, line) => sum + Number(line.taxableValue || 0), 0) : Number(x?.amount || 0) - tax;
@@ -36,6 +40,7 @@ export default function InvoiceDetail() {
       x?.status !== 'Paid' && { label: 'Mark as paid', icon: <CircleCheck size={20} color={p.green} />, onPress: () => setStatus('Paid') },
       x?.status === 'Paid' && { label: 'Mark as unpaid', icon: <CircleCheck size={20} color={p.accentText} />, onPress: () => setStatus('Issued') },
       can('payments.create') && { label: 'Record payment', icon: <IndianRupee size={20} color={p.accentText} />, onPress: () => router.push({ pathname: '/payment-form', params: { projectId: x.projectId, customerId: x.customerId, amount: String(x.amount) } }) },
+      x?.status !== 'Cancelled' && x?.invoiceType !== 'Credit Note' && { label: 'Issue credit note…', icon: <RotateCcw size={20} color={p.accentText} />, onPress: () => setCreditOpen(true) },
       x?.status !== 'Cancelled' && { label: 'Cancel invoice', destructive: true, icon: <CircleX size={20} color={p.red} />, onPress: () => setStatus('Cancelled') },
     ].filter(Boolean) as any,
   });
@@ -82,6 +87,10 @@ export default function InvoiceDetail() {
           {x.description && !lines.some((l) => l.itemDescription === x.description) ? <Section header="Notes"><InfoRow label="" value={x.description} multiline /></Section> : null}
         </>
       )}
+      {x ? <FormSheet visible={creditOpen} title={`Credit note · ${x.invoiceNumber}`} submit="Issue credit note" onClose={() => setCreditOpen(false)}
+        note="The GST way to correct or reduce an issued invoice. GST is credited in the same proportion."
+        fields={[{ key: 'amount', label: 'Amount (empty = all that is left)', type: 'money' }, { key: 'reason', label: 'Reason (printed)', required: true }]}
+        onSubmit={async (v) => { const r = await care.creditNote(x.id, v.amount ? num(v.amount) : undefined, v.reason.trim()); toast(`Credit note ${r.invoice.invoiceNumber} issued`); setCreditOpen(false); void q.refresh(); }} /> : null}
     </Screen>
   );
 }

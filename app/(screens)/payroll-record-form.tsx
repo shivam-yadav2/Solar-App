@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { api } from '../../src/lib/api';
+import { care } from '../../src/lib/apis/care';
 import { loadEmployees, loadProjects } from '../../src/lib/pickers';
 import { formatINR } from '../../src/lib/formatters';
 import { Button, DateField, FormSection, InfoRow, ListSkeleton, Screen, Section, SelectField, T, TextField, haptic, num, todayISO, useOverlay } from '../../src/ds';
@@ -13,7 +14,7 @@ export default function PayrollRecordFormScreen() {
   const router = useRouter(); const { id } = useLocalSearchParams<{ id?: string }>(); const { toast } = useOverlay();
   const [employee, setEmployee] = useState<{ value: string; label: string } | null>(null);
   const [project, setProject] = useState<{ value: string; label: string } | null>(null);
-  const [f, setF] = useState<any>({ month: new Date().toISOString().slice(0, 7), baseSalary: '', hra: '0', siteAllowance: '0', projectCommission: '0', bonus: '0', providentFund: '0', professionalTax: '200', tds: '0', advanceDeduction: '0', leaveDeductions: '0', status: 'Pending', paymentDate: '', paymentMethod: 'Bank Transfer', transactionRef: '', paymentNotes: '' });
+  const [f, setF] = useState<any>({ month: new Date().toISOString().slice(0, 7), baseSalary: '', hra: '0', siteAllowance: '0', projectCommission: '0', bonus: '0', providentFund: '0', professionalTax: '0', tds: '0', advanceDeduction: '0', leaveDeductions: '0', status: 'Pending', paymentDate: '', paymentMethod: 'Bank Transfer', transactionRef: '', paymentNotes: '' });
   const [loading, setLoading] = useState(!!id); const [saving, setSaving] = useState(false); const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => { if (!id) return; api.getPayrollRecords({ limit: '500' }).then((result) => { const record = result.records.find((item) => item.id === id); if (!record) { toast('Payroll record not found', 'error'); return; } setEmployee({ value: record.employeeId, label: record.employeeName }); if (record.linkedProjectId) setProject({ value: record.linkedProjectId, label: record.linkedProjectName || 'Linked project' }); setF({ ...record, ...Object.fromEntries(NUMBER_FIELDS.map((key) => [key, String(record[key] || 0)])), paymentDate: record.paymentDate?.slice(0, 10) || '' }); }).catch((e) => toast(e.message, 'error')).finally(() => setLoading(false)); }, [id, toast]);
   const totals = useMemo(() => { const gross = num(f.baseSalary) + num(f.hra) + num(f.siteAllowance) + num(f.projectCommission) + num(f.bonus); const deductions = num(f.providentFund) + num(f.professionalTax) + num(f.tds) + num(f.advanceDeduction) + num(f.leaveDeductions); return { gross, deductions, net: Math.max(0, gross - deductions) }; }, [f]);
@@ -21,6 +22,8 @@ export default function PayrollRecordFormScreen() {
   const selectEmployee = async (option: { value: string; label: string } | null) => {
     setEmployee(option); if (!option) return;
     const result = await api.getEmployees({ limit: '500' }).catch(() => null); const found = result?.employees.find((item) => item.id === option.value); if (found) set('baseSalary')(String(found.baseSalary));
+    // A new salary entry recovers the advances still due (the amount stays editable).
+    if (!id) { const o = await care.advancesOutstanding().catch(() => null); set('advanceDeduction')(String(o?.outstanding?.[option.value]?.amount || 0)); }
   };
   const save = async () => {
     const validation: Record<string, string> = {}; if (!employee) validation.employee = 'Choose an employee.'; if (!f.month.match(/^\d{4}-\d{2}$/)) validation.month = 'Use YYYY-MM.'; if (num(f.baseSalary) < 0) validation.salary = 'Enter a valid salary.';

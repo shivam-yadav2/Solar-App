@@ -2,7 +2,8 @@ import React from 'react';
 import { Image, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Calculator, FileText, FolderOpen, IndianRupee, MessageSquareHeart, ShieldCheck, Wrench, Zap } from 'lucide-react-native';
+import { CalendarClock, Calculator, FileText, FolderOpen, IndianRupee, MessageSquareHeart, ShieldCheck, Wrench, Zap } from 'lucide-react-native';
+import { care } from '../../lib/apis/care';
 import { api } from '../../lib/api';
 import { useApi } from '../../lib/query';
 import { useAuth } from '../../context/AuthContext';
@@ -79,6 +80,8 @@ export function CustomerHome() {
 
           {main ? <DiscomCard projectId={main.id} /> : null}
 
+          <UpcomingVisits />
+
           <QuickActions items={[
             { label: 'Get help', icon: Wrench, tone: 'red', onPress: () => go('/ticket-form') },
             { label: 'Warranty', icon: ShieldCheck, tone: 'green', onPress: () => go('/warranties') },
@@ -127,3 +130,17 @@ function DiscomCard({ projectId }: { projectId: string }) {
     </Card>
   );
 }
+
+/** Next cleaning / maintenance visits booked by the installer. */
+function UpcomingVisits() {
+  const p = useTheme();
+  const q = useQuery({ queryKey: ['visits', 'mine'], queryFn: () => care.visits({ status: 'Scheduled' }) });
+  const visits = (q.data?.visits || []).slice(0, 3);
+  if (!visits.length) return null;
+  return (
+    <Section header="Upcoming maintenance" footer="To change a date, call your installer.">
+      {visits.map((v) => <Row key={v.id} icon={<IconTile icon={<CalendarClock size={17} color={p.teal} />} tone="teal" />} title={formatDate(v.dueDate)} subtitle={`${v.visitType}${v.projectName ? ` · ${v.projectName}` : ''}`} />)}
+    </Section>
+  );
+}
+
