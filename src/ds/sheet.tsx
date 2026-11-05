@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Dimensions, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -92,18 +92,9 @@ export function Picker({ visible, onClose, title, value, options, load, queryKey
   const remote = useQuery({ queryKey: ['picker', queryKey || title, q], queryFn: () => load!(q), enabled: visible && !!load, staleTime: 60_000 });
   const local = options ? options.filter((o) => !text || `${o.label} ${o.subtitle || ''}`.toLowerCase().includes(text.toLowerCase())) : [];
   const items = load ? remote.data || [] : local;
-  return (
-    <Sheet visible={visible} onClose={onClose} title={title} full={!!load || (options?.length || 0) > 8}>
-      <View style={{ paddingHorizontal: GUTTER, paddingBottom: space.s }}>
-        <SearchBar value={text} onChange={setText} onSearch={load ? setQ : undefined} placeholder={placeholder} />
-      </View>
-      {load && remote.isPending ? <Spinner /> : items.length === 0 ? <EmptyState title="Nothing found" message={text ? `No match for “${text}”.` : undefined} /> : (
-        <FlashList
-          data={allowClear ? [{ value: '', label: 'None' }, ...items] : items}
-          keyExtractor={(o) => o.value || '__none'}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xl }}
-          renderItem={({ item, index }) => (
+  const full = !!load || (options?.length || 0) > 8;
+  const list = allowClear ? [{ value: '', label: 'None' }, ...items] : items;
+  const renderRow = (item: PickerOption, index: number) => (
             <GroupedItem index={index} count={items.length + (allowClear ? 1 : 0)}>
               <Tap onPress={() => { haptic.tap(); onSelect(item.value ? item : null); onClose(); }} scaleTo={0.985} style={{ paddingHorizontal: space.l, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: space.m }}>
                 <View style={{ flex: 1 }}>
@@ -113,8 +104,27 @@ export function Picker({ visible, onClose, title, value, options, load, queryKey
                 {item.value === (value || '') && (item.value || allowClear) ? <Check size={18} color={p.accentText} strokeWidth={2.6} /> : null}
               </Tap>
             </GroupedItem>
-          )}
-        />
+  );
+  return (
+    <Sheet visible={visible} onClose={onClose} title={title} full={full}>
+      <View style={{ paddingHorizontal: GUTTER, paddingBottom: space.s }}>
+        <SearchBar value={text} onChange={setText} onSearch={load ? setQ : undefined} placeholder={placeholder} />
+      </View>
+      {load && remote.isPending ? <Spinner /> : items.length === 0 ? <EmptyState title="Nothing found" message={text ? `No match for “${text}”.` : undefined} /> : (
+        full ? (
+          <FlashList
+            data={list}
+            keyExtractor={(o) => o.value || '__none'}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xl }}
+            renderItem={({ item, index }) => renderRow(item, index)}
+          />
+        ) : (
+          // Short fixed lists: a plain scroll view — FlashList needs a sized parent and renders nothing in a content-height sheet.
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: GUTTER, paddingBottom: space.xl }}>
+            {list.map((item, index) => <React.Fragment key={item.value || '__none'}>{renderRow(item, index)}</React.Fragment>)}
+          </ScrollView>
+        )
       )}
     </Sheet>
   );

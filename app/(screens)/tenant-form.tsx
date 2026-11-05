@@ -35,7 +35,7 @@ export default function TenantForm() {
       else {
         const r = await api.createSaaSTenant({ name: f.name, slug: f.slug.trim().toLowerCase(), adminEmail: f.adminEmail.trim(), adminPassword: f.adminPassword || undefined, planId: f.planId, ...profile() } as any);
         toast('Company created');
-        setCreds({ name: f.name, login: r.initialCredentials.email, password: r.initialCredentials.tempPassword || f.adminPassword, phone: f.supportPhone, company: 'SolarOS' });
+        setCreds({ name: f.name, login: r.initialCredentials.email, password: r.initialCredentials.tempPassword || f.adminPassword, phone: f.supportPhone, company: f.name, slug: f.slug.trim().toLowerCase(), audience: 'staff' });
       }
     } catch (e: any) { toast(e.message, 'error'); } finally { setSaving(false); }
   };
