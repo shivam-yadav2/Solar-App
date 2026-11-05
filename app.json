@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.solaros.mobile",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "icon": "./assets/branding/brand-app-icon-v3.png"
     },
     "android": {
